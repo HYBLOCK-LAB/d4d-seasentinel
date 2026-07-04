@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 
-from presail.config import Aoi, load_aois
+from presail.config import Aoi, Event, load_aois, load_events, load_index_config
 from presail.gdelt import fetch_volraw_and_tone
 from presail.gfw import fetch_4wings_daily, token
 from presail.paths import data_dir
+
+WINDOW_PAD_DAYS = 20
 
 GDELT_QUERIES = {
     "whitsun_reef": {
@@ -67,14 +69,29 @@ def _gfw_rows(aoi: Aoi, start: date, end: date) -> list[dict]:
     return rows
 
 
+def _event_window(event: Event, cfg, start: date, end: date) -> tuple[date, date] | None:
+    lead = cfg.baseline_days + cfg.embargo_days + event.search_days_before + WINDOW_PAD_DAYS
+    window_start = max(start, event.event_date - timedelta(days=lead))
+    window_end = min(end, event.event_date + timedelta(days=event.search_days_after + WINDOW_PAD_DAYS))
+    if window_start >= window_end:
+        return None
+    return window_start, window_end
+
+
 def build_signals(start: date, end: date, gdelt_only: bool = False) -> pd.DataFrame:
     use_gfw = not gdelt_only and token() is not None
+    cfg = load_index_config()
     aois = {a.aoi_id: a for a in load_aois()}
+    events = {e.aoi_id: e for e in load_events()}
     rows: list[dict] = []
     for aoi_id in GDELT_QUERIES:
-        rows.extend(_gdelt_rows(aoi_id, start, end))
+        window = _event_window(events[aoi_id], cfg, start, end)
+        if window is None:
+            continue
+        win_start, win_end = window
+        rows.extend(_gdelt_rows(aoi_id, win_start, win_end))
         if use_gfw:
-            rows.extend(_gfw_rows(aois[aoi_id], start, end))
+            rows.extend(_gfw_rows(aois[aoi_id], win_start, win_end))
     frame = pd.DataFrame(rows)
     path = data_dir("processed", "signals.parquet")
     path.parent.mkdir(parents=True, exist_ok=True)
