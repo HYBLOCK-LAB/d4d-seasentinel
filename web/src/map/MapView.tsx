@@ -26,7 +26,7 @@ export function MapView({ children }: { children?: ReactNode }) {
       dragRotate: false,
     })
     m.addControl(new NavigationControl({ showCompass: false }), 'top-right')
-    m.addControl(new ScaleControl({ unit: 'nautical' }), 'bottom-left')
+    m.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left')
     m.on('mousemove', (e) => setCursor({ lon: e.lngLat.lng, lat: e.lngLat.lat }))
     m.on('load', () => setMap(m))
     return () => {

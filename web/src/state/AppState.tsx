@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import type { Meta, Region, TimeWindow } from '../api/types'
 import { DEFAULT_REGION_ID, FALLBACK_REGIONS } from '../constants/regions'
 
-export type RightPanel = 'ontology' | 'copilot' | null
+export type RightPanel = 'ontology' | 'copilot' | 'osint' | null
 
 export interface AppState {
   regions: Region[]
@@ -36,8 +36,8 @@ export const DEFAULT_LAYERS: Record<string, boolean> = {
   alerts_geo: true,
   events: true,
   zones: true,
-  cables: false,
-  ports: false,
+  cables: true,
+  ports: true,
 }
 
 function hoursAgo(end: string, h: number): string {
@@ -69,7 +69,7 @@ function reducer(state: AppState, action: Action): AppState {
         meta: action.meta,
         regions: action.meta.regions.length ? action.meta.regions : state.regions,
         window: w,
-        fullRange: { start: hoursAgo(w.end, 24 * 365 * 6), end: w.end },
+        fullRange: w,
       }
     }
     case 'region':

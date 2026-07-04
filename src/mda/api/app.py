@@ -88,6 +88,21 @@ def timeline(
         return queries.get_timeline(conn, resolved_region, start, end, bucket)
 
 
+@app.get("/api/osint")
+def osint(
+    region: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> dict:
+    with pg.connect(readonly=True) as conn:
+        resolved_region = queries.resolve_region(region)
+        if start is None or end is None:
+            default_start, default_end = queries.compute_window(conn)
+            start = start or default_start
+            end = end or default_end
+        return queries.get_osint(conn, resolved_region, start, end)
+
+
 @app.get("/api/ontology/tables")
 def ontology_tables() -> list:
     with pg.connect(readonly=True) as conn:

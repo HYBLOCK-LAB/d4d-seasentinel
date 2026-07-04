@@ -107,11 +107,18 @@ def check_db(conn) -> bool:
 
 def compute_window(conn) -> tuple[datetime, datetime]:
     with conn.cursor() as cur:
-        cur.execute("SELECT max(ts) FROM ais_position")
+        cur.execute(
+            "SELECT least("
+            "  coalesce((SELECT min(ts) FROM ais_position), now()),"
+            "  coalesce((SELECT min(event_date)::timestamptz FROM event), now()),"
+            "  coalesce((SELECT min(date)::timestamptz FROM index_daily), now())"
+            "), greatest(coalesce((SELECT max(ts) FROM ais_position), now()), now())"
+        )
         row = cur.fetchone()
-    end = row[0] if row and row[0] is not None else datetime.now(timezone.utc)
-    start = end - timedelta(hours=72)
-    return start, end
+    if row is None or row[0] is None:
+        end = datetime.now(timezone.utc)
+        return end - timedelta(hours=72), end
+    return row[0], row[1]
 
 
 def get_window(conn) -> dict:
@@ -505,28 +512,38 @@ def _layer_ais_points(conn, region, start: datetime, end: datetime) -> dict:
     return _feature_collection(features)
 
 
+TRACK_SPLIT_GAP = timedelta(hours=1)
+
+
 def _layer_tracks(conn, region, start: datetime, end: datetime) -> dict:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT vessel_id, ST_X(geom), ST_Y(geom) FROM ais_position "
+            "SELECT vessel_id, ST_X(geom), ST_Y(geom), ts FROM ais_position "
             "WHERE region_id = %s AND ts BETWEEN %s AND %s ORDER BY vessel_id, ts",
             (region.region_id, start, end),
         )
         rows = cur.fetchall()
-    grouped: dict = {}
-    for vessel_id, lon, lat in rows:
-        grouped.setdefault(vessel_id, []).append([lon, lat])
-    features = []
-    for vessel_id, coords in grouped.items():
-        if len(coords) < 2:
-            continue
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {"type": "LineString", "coordinates": coords},
-                "properties": {"vessel_id": vessel_id, "n": len(coords)},
-            }
-        )
+    segments: list = []
+    prev_vessel = None
+    prev_ts = None
+    current: list = []
+    for vessel_id, lon, lat, ts in rows:
+        if vessel_id != prev_vessel or (prev_ts is not None and ts - prev_ts > TRACK_SPLIT_GAP):
+            if len(current) >= 2:
+                segments.append((prev_vessel, current))
+            current = []
+        current.append([lon, lat])
+        prev_vessel, prev_ts = vessel_id, ts
+    if len(current) >= 2:
+        segments.append((prev_vessel, current))
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": coords},
+            "properties": {"vessel_id": vessel_id, "n": len(coords)},
+        }
+        for vessel_id, coords in segments
+    ]
     return _feature_collection(features)
 
 
@@ -589,8 +606,9 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
         cur.execute(
             "SELECT ST_X(geom), ST_Y(geom), name, event_type, event_date, description "
             "FROM event WHERE geom IS NOT NULL AND (region_id = %s OR "
-            "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326)))",
-            (region.region_id, min_lon, min_lat, max_lon, max_lat),
+            "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))) "
+            "AND event_date BETWEEN %s AND %s",
+            (region.region_id, min_lon, min_lat, max_lon, max_lat, start.date(), end.date()),
         )
         rows = cur.fetchall()
     features = [
@@ -725,6 +743,32 @@ def get_timeline(conn, region, start: datetime, end: datetime, bucket: str) -> d
         "buckets": [
             {"t": _iso(b["t"]), "ais": b["ais"], "osint": b["osint"], "alerts": b["alerts"]}
             for b in ordered
+        ]
+    }
+
+
+def get_osint(conn, region, start: datetime, end: datetime) -> dict:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT item_id, ts, kind, lang, text, source_module, sentiment, weight "
+            "FROM osint_item WHERE (region_id = %s OR region_id IS NULL) "
+            "AND ts BETWEEN %s AND %s ORDER BY ts DESC LIMIT 500",
+            (region.region_id, start, end),
+        )
+        rows = cur.fetchall()
+    return {
+        "items": [
+            {
+                "id": item_id,
+                "ts": _iso(ts),
+                "kind": kind,
+                "lang": lang,
+                "text": text,
+                "source": source_module,
+                "sentiment": sentiment,
+                "weight": weight,
+            }
+            for item_id, ts, kind, lang, text, source_module, sentiment, weight in rows
         ]
     }
 

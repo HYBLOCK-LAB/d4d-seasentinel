@@ -10,6 +10,13 @@ interface Message {
   text: string;
 }
 
+const PRESETS = [
+  '지난 24시간 해저케이블 인근 다크선박 있나?',
+  '부산 입항 예정 선박 중 최고위험 표적은?',
+  '제재회피 STS 환적 정황을 요약해줘',
+  '이 해역에서 지금 가장 위험한 표적 3개는?',
+];
+
 export function CopilotPanel() {
   const state = useAppState();
   const [models, setModels] = useState<string[]>([]);
@@ -33,8 +40,8 @@ export function CopilotPanel() {
     }
   }, [messages]);
 
-  async function handleSend() {
-    const query = input.trim();
+  async function handleSend(override?: string) {
+    const query = (override ?? input).trim();
     if (!query || streaming) {
       return;
     }
@@ -72,6 +79,8 @@ export function CopilotPanel() {
     }
   }
 
+  const showPresets = !streaming && messages.length === 0;
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -83,6 +92,15 @@ export function CopilotPanel() {
           ))}
         </select>
       </div>
+      {showPresets ? (
+        <div className={styles.presets}>
+          {PRESETS.map((preset) => (
+            <button key={preset} className={`${styles.presetChip} mono`} onClick={() => void handleSend(preset)}>
+              {preset}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className={styles.list} ref={listRef}>
         {messages.map((message, index) => (
           <div key={index} className={message.role === 'user' ? styles.userMsg : styles.assistantMsg}>

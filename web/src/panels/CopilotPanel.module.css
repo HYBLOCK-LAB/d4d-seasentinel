@@ -23,6 +23,31 @@
   border-radius: var(--radius-sm);
 }
 
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.presetChip {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.presetChip:hover {
+  border-color: var(--accent);
+  color: var(--text-1);
+}
+
 .list {
   flex: 1;
   min-height: 0;

@@ -45,21 +45,22 @@ function formatSpan(ms: number): string {
   return `${(days / 365).toFixed(1)}y`;
 }
 
-function initialDomain(windowEndIso: string): Domain {
-  const endMs = new Date(windowEndIso).getTime();
-  const startMs = endMs - PRESET_MS['30D'];
-  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
-}
+const SPEEDS = [0.5, 1, 2, 4];
 
 export function Timebar() {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const region = useRegion();
 
-  const [domain, setDomain] = useState<Domain>(() => initialDomain(state.window.end));
-  const [activePreset, setActivePreset] = useState<PresetKey>('30D');
+  const [domain, setDomain] = useState<Domain>(() => ({ ...state.fullRange }));
+  const [activePreset, setActivePreset] = useState<PresetKey>('ALL');
   const [buckets, setBuckets] = useState<TimelineBucket[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [speed, setSpeed] = useState(1);
+
+  useEffect(() => {
+    if (activePreset === 'ALL') setDomain({ ...state.fullRange });
+  }, [activePreset, state.fullRange]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -218,9 +219,9 @@ export function Timebar() {
         type: 'window',
         window: { start: new Date(nextStart).toISOString(), end: new Date(nextEnd).toISOString() },
       });
-    }, PLAY_INTERVAL_MS);
+    }, PLAY_INTERVAL_MS / speed);
     return () => window.clearInterval(id);
-  }, [state.playing, state.window, domain.end, dispatch]);
+  }, [state.playing, state.window, domain.end, dispatch, speed]);
 
   const applyPreset = useCallback(
     (key: PresetKey) => {
@@ -332,6 +333,14 @@ export function Timebar() {
         >
           {state.playing ? <Pause size={14} /> : <Play size={14} />}
         </IconButton>
+        <button
+          type="button"
+          className={`${styles.presetBtn} mono`}
+          title="재생 속도"
+          onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] as number)}
+        >
+          {speed}×
+        </button>
         <div className={styles.presets}>
           {PRESET_KEYS.map((key) => (
             <button
