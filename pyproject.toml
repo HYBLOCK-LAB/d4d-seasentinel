@@ -20,6 +20,9 @@ dev = [
     "pytest",
 ]
 
+[project.scripts]
+mda = "mda.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
