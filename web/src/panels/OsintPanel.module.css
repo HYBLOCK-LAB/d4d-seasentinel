@@ -102,3 +102,117 @@
   color: var(--text-3);
   font-size: var(--fs-xs);
 }
+
+.modeToggle {
+  display: flex;
+  gap: 2px;
+}
+
+.modeBtn {
+  padding: 1px var(--sp-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.modeBtn:hover {
+  color: var(--text-1);
+}
+
+.modeBtnActive {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.noticeBar {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-micro);
+  color: var(--warn);
+  background: var(--warn-dim);
+  border-bottom: 1px solid var(--line);
+}
+
+.digestItem {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.digestItem:hover {
+  background: var(--bg-2);
+}
+
+.categoryChip {
+  display: inline-flex;
+  padding: 0 var(--sp-1);
+  height: 15px;
+  align-items: center;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+
+.severityBar {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.severitySeg {
+  width: 8px;
+  height: 4px;
+  border-radius: 1px;
+}
+
+.summary {
+  font-size: 12px;
+  color: var(--text-1);
+  line-height: 1.5;
+}
+
+.metaMono {
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+
+.evidenceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.evidenceChip {
+  font-size: var(--fs-micro);
+  color: var(--text-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-1);
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.evidenceChip:hover {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.rowHighlight {
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--accent-dim);
+}
