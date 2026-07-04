@@ -1,0 +1,121 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-3);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  padding-bottom: var(--sp-1);
+  border-bottom: 1px solid var(--line);
+}
+
+.themeRow {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.themeButton {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.themeButton:hover {
+  border-color: var(--line-strong);
+  color: var(--text-1);
+}
+
+.themeButtonActive {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-1);
+}
+
+.modelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.modelIcon {
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.select {
+  flex: 1;
+  padding: var(--sp-2);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.select:hover {
+  border-color: var(--line-strong);
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.caption {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  align-self: flex-start;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.toggle:hover {
+  border-color: var(--line-strong);
+}
+
+.toggleOn {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-1);
+}
+
+.toggleOff {
+  color: var(--text-3);
+}

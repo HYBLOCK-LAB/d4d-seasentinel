@@ -4,12 +4,14 @@ import { useAppState, useAppDispatch, type RightPanel } from '../state/AppState'
 import { OntologyPanel } from '../panels/OntologyPanel';
 import { CopilotPanel } from '../panels/CopilotPanel';
 import { OsintPanel } from '../panels/OsintPanel';
+import { SettingsPanel } from '../panels/SettingsPanel';
 import styles from './RightDrawer.module.css';
 
 const TABS: Array<{ id: Exclude<RightPanel, null>; label: string }> = [
   { id: 'ontology', label: 'ONTOLOGY · 원본' },
   { id: 'osint', label: 'OSINT · 첩보' },
   { id: 'copilot', label: 'COPILOT · 질의' },
+  { id: 'settings', label: '설정' },
 ];
 
 export function RightDrawer() {
@@ -39,6 +41,8 @@ export function RightDrawer() {
           <CopilotPanel />
         ) : state.rightPanel === 'osint' ? (
           <OsintPanel />
+        ) : state.rightPanel === 'settings' ? (
+          <SettingsPanel />
         ) : (
           <OntologyPanel />
         )}

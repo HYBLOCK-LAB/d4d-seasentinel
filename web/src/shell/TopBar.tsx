@@ -1,4 +1,4 @@
-import { Database, MessageSquareText, Rss } from 'lucide-react'
+import { Database, MessageSquareText, Rss, Settings } from 'lucide-react'
 import { IconButton, Kpi } from '../design/components'
 import { useAppDispatch, useAppState } from '../state/AppState'
 import styles from './TopBar.module.css'
@@ -60,6 +60,13 @@ export function TopBar() {
           onClick={() => dispatch({ type: 'rightPanel', panel: state.rightPanel === 'copilot' ? null : 'copilot' })}
         >
           <MessageSquareText size={14} />
+        </IconButton>
+        <IconButton
+          title="설정"
+          active={state.rightPanel === 'settings'}
+          onClick={() => dispatch({ type: 'rightPanel', panel: state.rightPanel === 'settings' ? null : 'settings' })}
+        >
+          <Settings size={14} />
         </IconButton>
       </div>
     </header>
