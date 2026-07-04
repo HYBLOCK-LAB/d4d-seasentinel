@@ -1,7 +1,0 @@
-{
-  "name": "seasentinel",
-  "version": "1.0.0",
-  "private": true,
-  "description": "SEASENTINEL — Maritime Domain Awareness intelligence layer (D4D T4)",
-  "engines": { "node": "20.x" }
-}

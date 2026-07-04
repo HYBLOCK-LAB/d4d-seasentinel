@@ -103,9 +103,9 @@ def _cmd_collect_reference(args) -> None:
 
 
 def _cmd_analyze(args) -> None:
-    from mda.pipelines import tracks
+    from mda.pipelines import scoring
 
-    print(tracks.run_analysis(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
+    print(scoring.run_scoring(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
 
 
 def _cmd_foundry_sync(args) -> None:

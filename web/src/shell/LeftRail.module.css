@@ -1,0 +1,82 @@
+.rail {
+  width: var(--rail-w);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.threatsWrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.layersWrap {
+  flex: 0 1 auto;
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+}
+
+.layersBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  overflow-y: auto;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupCaption {
+  padding: var(--sp-1) var(--sp-3);
+}
+
+.layerRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 26px;
+  padding: 0 var(--sp-3);
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.layerRow:hover {
+  background: var(--bg-2);
+}
+
+.chipSquare {
+  width: 8px;
+  height: 8px;
+  border: 1px solid;
+  flex: 0 0 auto;
+}
+
+.chipLine {
+  width: 8px;
+  height: 0;
+  border-top: 2px solid;
+  flex: 0 0 auto;
+}
+
+.layerTitle {
+  font-size: var(--fs-xs);
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}

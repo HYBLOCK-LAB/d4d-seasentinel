@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+data
+data-tmp
+docs
+charts
+tests
+simulation
+dashboard
+web/node_modules
+web/dist
+*.png
+*.jpeg
+.playwright-mcp
+.superpowers

@@ -1,0 +1,21 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+}
+
+.panel + .panel {
+  border-top: none;
+}
+
+.body {
+  padding: var(--sp-3);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.body.noPad {
+  padding: 0;
+}

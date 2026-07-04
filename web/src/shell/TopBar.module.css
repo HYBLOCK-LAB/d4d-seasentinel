@@ -1,0 +1,71 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-3);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+  z-index: var(--z-topbar);
+  flex-shrink: 0;
+}
+
+.brand {
+  font-size: var(--fs-md);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--text-1);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.brand b {
+  font-weight: 700;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sub {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.region {
+  height: 26px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+}
+
+.window {
+  font-size: var(--fs-micro);
+  color: var(--text-2);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.kpis {
+  display: flex;
+  gap: var(--sp-4);
+  padding-right: var(--sp-3);
+  border-right: 1px solid var(--line);
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-1);
+}

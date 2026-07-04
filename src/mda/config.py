@@ -116,6 +116,16 @@ def load_incidents() -> list[Incident]:
     return [_build(Incident, item) for item in _load_yaml("incidents.yaml")]
 
 
+@dataclass
+class ScoringConfig:
+    thresholds: dict[str, float]
+    detectors: dict[str, dict]
+
+
+def load_scoring_config() -> ScoringConfig:
+    return _build(ScoringConfig, _load_yaml("scoring.yaml"))
+
+
 def load_index_config() -> IndexConfig:
     data = _load_yaml("index.yaml")
     data["thresholds"] = Thresholds(**data["thresholds"])

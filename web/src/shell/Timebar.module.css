@@ -1,0 +1,96 @@
+.root {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-3);
+  height: var(--timebar-h);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+  z-index: var(--z-chrome);
+  flex-shrink: 0;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.presets {
+  display: flex;
+  gap: 2px;
+}
+
+.presetBtn {
+  padding: 1px var(--sp-1);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.presetBtn:hover {
+  color: var(--text-1);
+}
+
+.presetBtnActive {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.histWrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.labels {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 2px;
+}
+
+.edgeLabel {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+
+.centerLabel {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--accent);
+}
+
+.emptyLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}

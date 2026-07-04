@@ -1,0 +1,21 @@
+thresholds:
+  high: 75.0
+  critical: 90.0
+detectors:
+  ais_gap:
+    min_gap_hours: 6.0
+    points_base: 40.0
+    points_per_hour: 2.0
+    coverage_bonus: 10.0
+  cable_proximity:
+    max_km: 3.0
+    points_base: 55.0
+    points_per_km_inside: 10.0
+    loiter_sog_kn: 1.0
+    loiter_min_hours: 2.0
+    loiter_points: 25.0
+  sanctioned_match:
+    points_match: 80.0
+    points_presence: 18.0
+  zone_activity:
+    boost_points: 12.0

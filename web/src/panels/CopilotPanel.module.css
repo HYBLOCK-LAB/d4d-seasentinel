@@ -1,0 +1,88 @@
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.select {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  font-size: var(--fs-xs);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+}
+
+.userMsg {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2);
+  font-size: var(--fs-base);
+  color: var(--text-1);
+  white-space: pre-wrap;
+}
+
+.assistantMsg {
+  align-self: flex-start;
+  max-width: 100%;
+  color: var(--text-2);
+  font-size: var(--fs-base);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.label {
+  color: var(--text-3);
+}
+
+.text {
+  white-space: pre-wrap;
+}
+
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.textarea {
+  flex: 1;
+  resize: none;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-size: var(--fs-base);
+  padding: var(--sp-2);
+}
+
+.textarea:disabled {
+  opacity: 0.6;
+}

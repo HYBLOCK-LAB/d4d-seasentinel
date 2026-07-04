@@ -1,0 +1,75 @@
+/* MDA SENTINEL design tokens — restrained ops-console palette. Reference these
+   custom properties only; no hex literals should appear outside this file. */
+:root {
+  /* Surface scale — deep navy, darkest at the map layer, lighter for chrome. */
+  --bg-0: #0a1220;
+  --bg-1: #0f1a2e;
+  --bg-2: #16233c;
+  --bg-3: #1c2c48;
+
+  /* Structural lines — low-alpha steel, never pure white/black. */
+  --line: rgba(148, 178, 209, 0.14);
+  --line-strong: rgba(148, 178, 209, 0.26);
+
+  /* Text */
+  --text-1: #eef3f9;
+  --text-2: #8fa3bd;
+  --text-3: #5b6b85;
+
+  /* The single interactive/data accent. */
+  --accent: #35e0c2;
+  --accent-dim: rgba(53, 224, 194, 0.14);
+  --accent-line: rgba(53, 224, 194, 0.4);
+
+  /* Threat-level colors — used ONLY for level semantics, never decoration. */
+  --warn: #f5a623;
+  --warn-dim: rgba(245, 166, 35, 0.14);
+  --crit: #ff5a4d;
+  --crit-dim: rgba(255, 90, 77, 0.16);
+
+  /* Type */
+  --font-display: 'Archivo Variable', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --fs-micro: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 22px;
+
+  --lh-tight: 1.15;
+  --lh-normal: 1.4;
+
+  --tracking-micro: 0.08em;
+  --tracking-wide: 0.04em;
+
+  /* 4px spacing grid */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 160ms;
+
+  /* Layout constants */
+  --topbar-h: 44px;
+  --rail-w: 320px;
+  --drawer-w: 380px;
+  --timebar-h: 72px;
+
+  --z-map: 0;
+  --z-chrome: 10;
+  --z-topbar: 20;
+  --z-drawer: 30;
+  --z-overlay: 40;
+}

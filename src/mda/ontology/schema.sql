@@ -145,6 +145,18 @@ create table if not exists alert_timeline_step (
     primary key (alert_id, step_no)
 );
 
+create table if not exists alert_evidence (
+    evidence_id bigserial primary key,
+    alert_id text not null references alert (alert_id) on delete cascade,
+    term_name text not null,
+    points double precision not null,
+    src_table text not null,
+    src_id text not null,
+    detail text,
+    method_version text not null
+);
+create index if not exists alert_evidence_alert_idx on alert_evidence (alert_id);
+
 create table if not exists entity_link (
     link_id text primary key,
     src_type text not null,

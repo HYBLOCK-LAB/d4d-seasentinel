@@ -18,16 +18,16 @@ services:
       retries: 5
 
   dashboard:
-    build: ./dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
     restart: unless-stopped
     network_mode: bridge
     environment:
-      PORT: "8080"
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL}
-    volumes:
-      - ./dashboard/data:/app/data:ro
+      MDA_PG_DSN: postgresql://mda:${MDA_PG_PASSWORD}@172.17.0.1:5434/mda
     ports:
       - "8123:8080"
 
