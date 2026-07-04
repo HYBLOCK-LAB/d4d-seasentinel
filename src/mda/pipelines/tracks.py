@@ -19,7 +19,7 @@ select vessel_id, prev_ts, ts, region_id,
     extract(epoch from (ts - prev_ts)) / 3600.0 as gap_hours,
     ST_Y(prev_geom) as lat, ST_X(prev_geom) as lon
 from ordered
-where prev_ts is not null and ts - prev_ts > make_interval(hours => %s)
+where prev_ts is not null and ts - prev_ts > (%s * interval '1 hour')
 """
 
 CABLE_SQL = """
@@ -71,6 +71,7 @@ def detect_ais_gaps(conn, min_gap_hours: float = 6.0) -> list[dict]:
         rows = cur.fetchall()
     alerts = []
     for vessel_id, prev_ts, ts, region_id, gap_hours, lat, lon in rows:
+        gap_hours = float(gap_hours)
         alert_id = f"gap:{vessel_id}:{prev_ts.isoformat()}"
         score = min(100.0, 60.0 + gap_hours)
         alerts.append(
@@ -91,6 +92,7 @@ def detect_cable_proximity(conn, max_km: float = 3.0) -> tuple[list[dict], list[
         rows = cur.fetchall()
     alerts, links = [], []
     for vessel_id, zone_id, name, dist_m, first_ts in rows:
+        dist_m = float(dist_m)
         alert_id = f"cable:{vessel_id}:{zone_id}"
         alerts.append(
             _alert(

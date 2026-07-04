@@ -118,10 +118,26 @@ def _vessel_row(msg: dict, msg_type: str) -> dict | None:
     }
 
 
+def _minimal_vessels(positions: list[dict]) -> list[dict]:
+    seen = {}
+    for p in positions:
+        vid = p["vessel_id"]
+        if vid not in seen:
+            seen[vid] = {
+                "vessel_id": vid,
+                "mmsi": p["mmsi"],
+                "source_id": "aisstream",
+                "collector": "aisstream_realtime",
+            }
+    return list(seen.values())
+
+
 def _flush(positions: list[dict], vessels: dict[str, dict]) -> None:
     if not positions and not vessels:
         return
     with pg.connect() as conn:
+        if positions:
+            pg.upsert(conn, "vessel", _minimal_vessels(positions), conflict=["vessel_id"])
         if vessels:
             pg.upsert(
                 conn,

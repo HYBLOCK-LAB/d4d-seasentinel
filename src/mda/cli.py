@@ -108,6 +108,16 @@ def _cmd_analyze(args) -> None:
     print(tracks.run_analysis(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
 
 
+def _cmd_export_dashboard(args) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from mda.pipelines import exporter
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(hours=args.hours)
+    print(exporter.export_dashboard(args.region, start, end))
+
+
 def _cmd_ais_stream(args) -> None:
     from mda.collectors import aisstream_realtime
 
@@ -208,6 +218,11 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--min-gap-hours", type=float, default=6.0)
     an.add_argument("--cable-km", type=float, default=3.0)
     an.set_defaults(func=_cmd_analyze)
+
+    ed = sub.add_parser("export-dashboard")
+    ed.add_argument("--region", default="west_sea")
+    ed.add_argument("--hours", type=float, default=72.0)
+    ed.set_defaults(func=_cmd_export_dashboard)
 
     return parser
 
