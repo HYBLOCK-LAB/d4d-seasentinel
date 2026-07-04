@@ -210,6 +210,13 @@ def _counts() -> dict:
 def export_dashboard(region_id: str, start: datetime, end: datetime, out_dir=None) -> dict:
     out = out_dir or (repo_root() / "dashboard" / "data")
     out.mkdir(parents=True, exist_ok=True)
+    span = end - start
+    with pg.connect(readonly=True) as conn, conn.cursor() as cur:
+        cur.execute("select max(ts) from ais_position where region_id = %s", (region_id,))
+        latest = cur.fetchone()[0]
+    if latest and latest < end:
+        end = latest
+        start = end - span
     vessels, tracks = _vessels_and_tracks(region_id, start, end)
     vessel_ids = [v["id"] for v in vessels]
     files = {
