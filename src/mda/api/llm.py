@@ -1,12 +1,16 @@
+import json
 import os
+from datetime import datetime
 
 import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from mda.api import queries
 from mda.paths import repo_root
+from mda.store import pg
 
 load_dotenv(repo_root() / ".env")
 
@@ -24,6 +28,17 @@ SYSTEM_PROMPT = """당신은 대한민국 해양영역인식(MDA) 지휘결심 �
 - 필요 시 권고 조치를 제시하세요: 관심표적 지정 / ISR 재촬영 / 경비함 유도·차단 / 채증 패키지 / 지휘보고.
 - 4~8문장 또는 짧은 불릿으로. 과장·미사여구 금지."""
 
+AGENT_SUFFIX = "\n\n당신은 화면 조작 도구를 사용할 수 있습니다. 사용자가 화면 이동·표시 변경을 요청하면 도구를 호출하고, 정보 질의에는 컨텍스트로 답하세요. 도구 실행 결과는 시스템이 자동 반영합니다."
+
+DIGEST_SYSTEM_PROMPT = (
+    "당신은 해양 OSINT 분석관입니다. 아래 텔레그램/다크웹 수집 원문들에서 "
+    "'해상 영역 인식에 유의미한 정보'만 추출해 한국어로 항목화하세요. "
+    "원문에 없는 사실을 만들지 마세요. 반드시 JSON만 출력하세요. "
+    'schema: {"items":[{"category":"militia_movement|port_logistics|sanctions_evasion|infra_threat|other",'
+    '"summary_ko":"1-2문장 요약","time_hint":"원문상 시점","area_hint":"해역/항만 등 지리 힌트",'
+    '"severity":1-5,"evidence_ids":["원문 id"]}]}. 유의미한 항목이 없으면 빈 배열.'
+)
+
 JUNK_MODEL_IDS = {"high", "low", "medium", "gemini", "gpt", "chat_20706", "chat_23310"}
 
 router = APIRouter()
@@ -32,6 +47,19 @@ router = APIRouter()
 class CopilotRequest(BaseModel):
     query: str
     context: str = ""
+    model: str | None = None
+
+
+class AgentRequest(BaseModel):
+    messages: list[dict]
+    model: str | None = None
+    tools: list[dict] | None = None
+
+
+class DigestRequest(BaseModel):
+    region: str | None = None
+    start: str | None = None
+    end: str | None = None
     model: str | None = None
 
 
@@ -88,3 +116,85 @@ async def models() -> dict:
     except Exception:
         ids = []
     return {"models": ids or [LLM_MODEL], "default": LLM_MODEL}
+
+
+@router.post("/copilot/agent")
+async def copilot_agent(request: AgentRequest) -> dict | JSONResponse:
+    payload = {
+        "model": request.model or LLM_MODEL,
+        "messages": [{"role": "system", "content": SYSTEM_PROMPT + AGENT_SUFFIX}] + request.messages,
+        "temperature": 0.3,
+        "max_tokens": 900,
+    }
+    if request.tools:
+        payload["tools"] = request.tools
+        payload["tool_choice"] = "auto"
+    headers = {"Authorization": f"Bearer {LLM_API_KEY}"}
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(f"{LLM_BASE_URL}/chat/completions", json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:
+        return JSONResponse(status_code=502, content={"error": str(exc)})
+    return {"message": data["choices"][0]["message"]}
+
+
+@router.post("/osint/digest")
+async def osint_digest(request: DigestRequest) -> dict:
+    region = queries.resolve_region(request.region)
+    with pg.connect(readonly=True) as conn:
+        if request.start and request.end:
+            start = datetime.fromisoformat(request.start)
+            end = datetime.fromisoformat(request.end)
+        else:
+            start, end = queries.compute_window(conn)
+        items = queries.get_osint(conn, region, start, end)["items"][:80]
+
+    user_content = json.dumps(
+        [
+            {"id": item["id"], "ts": item["ts"], "kind": item["kind"], "text": (item["text"] or "")[:400]}
+            for item in items
+        ],
+        ensure_ascii=False,
+    )
+    used_model = request.model or LLM_MODEL
+    payload = {
+        "model": used_model,
+        "messages": [
+            {"role": "system", "content": DIGEST_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1600,
+    }
+    headers = {"Authorization": f"Bearer {LLM_API_KEY}"}
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(f"{LLM_BASE_URL}/chat/completions", json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+    content = data["choices"][0]["message"]["content"]
+
+    valid_ids = {item["id"] for item in items}
+    try:
+        text = content.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.startswith("json"):
+                text = text[4:]
+        start_idx = text.find("{")
+        end_idx = text.rfind("}")
+        parsed = json.loads(text[start_idx : end_idx + 1])
+        parsed_items = []
+        for entry in parsed.get("items", []):
+            entry["evidence_ids"] = [eid for eid in entry.get("evidence_ids", []) if eid in valid_ids]
+            parsed_items.append(entry)
+    except Exception:
+        return {"items": [], "error": "parse"}
+
+    return {
+        "items": parsed_items,
+        "model": used_model,
+        "note": "LLM 생성 분석 — 근거 원문 확인 필수",
+        "input_count": len(items),
+    }

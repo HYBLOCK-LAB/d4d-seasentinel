@@ -111,3 +111,17 @@
 .textarea:disabled {
   opacity: 0.6;
 }
+
+.toolChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-line);
+  border-radius: 2px;
+  padding: 1px 6px;
+  margin: 2px 4px 2px 0;
+}
