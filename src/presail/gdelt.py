@@ -10,9 +10,9 @@ from presail.cache import cache_key, get_or_fetch
 from presail.paths import data_dir
 
 BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
-CHUNK_DAYS = 120
+CHUNK_DAYS = 365
 MIN_INTERVAL = 5.0
-MAX_RETRIES = 5
+MAX_RETRIES = 6
 
 _last_call = 0.0
 
@@ -86,9 +86,9 @@ def _fetch_mode(query: str, mode: str, start: date, end: date) -> dict[date, dic
     return merged
 
 
-def fetch_volraw_and_tone(query: str, start: date, end: date) -> list[dict]:
+def fetch_volraw_and_tone(query: str, start: date, end: date, include_tone: bool = True) -> list[dict]:
     volraw = _fetch_mode(query, "timelinevolraw", start, end)
-    tone = _fetch_mode(query, "timelinetone", start, end)
+    tone = _fetch_mode(query, "timelinetone", start, end) if include_tone else {}
     days = sorted(set(volraw) | set(tone))
     rows = []
     for day in days:
