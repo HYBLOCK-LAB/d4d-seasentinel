@@ -11,7 +11,7 @@ from presail.cache import cache_key, get_or_fetch
 from presail.paths import data_dir, repo_root
 
 BASE = "https://gateway.api.globalfishingwatch.org/v3/4wings/report"
-CHUNK_DAYS = 60
+CHUNK_DAYS = 180
 VALUE_FIELD = {
     "public-global-presence:latest": "hours",
     "public-global-sar-presence:latest": "detections",
