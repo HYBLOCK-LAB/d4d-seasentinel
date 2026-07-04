@@ -1,0 +1,15 @@
+- region_id: west_sea
+  name: Korean West Sea (Yellow Sea)
+  theatre: ROK west coast / NLL
+  bbox: [124.0, 34.5, 126.6, 38.6]
+  priority: primary
+- region_id: south_china_sea
+  name: South China Sea
+  theatre: APAC gray-zone reefs
+  bbox: [109.0, 9.5, 118.0, 19.6]
+  priority: secondary
+- region_id: baltic
+  name: Baltic Sea
+  theatre: undersea-cable corridor
+  bbox: [9.0, 53.0, 30.0, 60.0]
+  priority: secondary

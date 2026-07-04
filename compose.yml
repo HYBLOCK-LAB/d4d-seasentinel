@@ -1,0 +1,22 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    network_mode: bridge
+    environment:
+      POSTGRES_USER: mda
+      POSTGRES_PASSWORD: ${MDA_PG_PASSWORD}
+      POSTGRES_DB: mda
+    ports:
+      - "5434:5432"
+    volumes:
+      - mda_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mda -d mda"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mda_pgdata:
+    name: mda_pgdata

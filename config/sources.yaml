@@ -1,0 +1,52 @@
+- source_id: gdelt
+  kind: news
+  enabled: true
+  base_url: https://api.gdeltproject.org/api/v2/doc/doc
+  license: open, no key
+- source_id: gfw
+  kind: ais_sar_aggregate
+  enabled: true
+  base_url: https://gateway.api.globalfishingwatch.org/v3/4wings/report
+  license: non-commercial API terms, bearer token
+- source_id: aisstream
+  kind: ais_realtime
+  enabled: true
+  base_url: wss://stream.aisstream.io/v0/stream
+  license: free beta, no SLA, no historical backfill
+- source_id: stealthmole
+  kind: osint_darkweb_telegram
+  enabled: true
+  base_url: https://hackathon.stealthmole.com
+  module: tt
+  license: NDA hackathon build, monthly quota
+- source_id: open_meteo
+  kind: weather
+  enabled: true
+  base_url: https://marine-api.open-meteo.com/v1/marine
+  forecast_url: https://api.open-meteo.com/v1/forecast
+  license: open, no key
+- source_id: ofac_sdn
+  kind: sanctions_reference
+  enabled: true
+  base_url: https://www.treasury.gov/ofac/downloads/sdn.csv
+  license: public domain
+- source_id: un1718
+  kind: sanctions_reference
+  enabled: true
+  base_url: https://scsanctions.un.org/resources/xml/en/consolidated.xml
+  license: public
+- source_id: world_port_index
+  kind: facility_reference
+  enabled: true
+  base_url: https://msi.nga.mil/api/publications/world-port-index
+  license: NGA public domain
+- source_id: telegeography_cables
+  kind: facility_reference
+  enabled: true
+  base_url: https://raw.githubusercontent.com/telegeography/www.submarinecablemap.com/master/web/public/api/v3/cable/cable-geo.json
+  license: open geojson
+- source_id: natural_earth
+  kind: coastline_reference
+  enabled: true
+  base_url: https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_coastline.zip
+  license: public domain

@@ -1,0 +1,34 @@
+targets:
+  - telegram.channel
+  - telegram.message
+keywords:
+  - term: 선원 모집
+    lang: ko
+    category: crew_recruitment
+  - term: 어선 선원 구인
+    lang: ko
+    category: crew_recruitment
+  - term: 해상 민병대
+    lang: ko
+    category: militia_mobilization
+  - term: 서해 조업
+    lang: ko
+    category: port_logistics
+  - term: 海上民兵
+    lang: zh
+    category: militia_mobilization
+  - term: 船员招募
+    lang: zh
+    category: crew_recruitment
+  - term: 渔船 补给
+    lang: zh
+    category: port_logistics
+  - term: maritime militia
+    lang: en
+    category: militia_mobilization
+  - term: crew recruitment fishing vessel
+    lang: en
+    category: crew_recruitment
+  - term: ship-to-ship transfer sanctions
+    lang: en
+    category: sanctions_evasion
