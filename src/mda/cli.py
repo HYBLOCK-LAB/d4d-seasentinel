@@ -108,6 +108,12 @@ def _cmd_analyze(args) -> None:
     print(tracks.run_analysis(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
 
 
+def _cmd_foundry_sync(args) -> None:
+    from mda.sync import sync
+
+    print(sync.sync_bounded())
+
+
 def _cmd_export_dashboard(args) -> None:
     from datetime import datetime, timedelta, timezone
 
@@ -223,6 +229,8 @@ def build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--region", default="west_sea")
     ed.add_argument("--hours", type=float, default=72.0)
     ed.set_defaults(func=_cmd_export_dashboard)
+
+    sub.add_parser("foundry-sync").set_defaults(func=_cmd_foundry_sync)
 
     return parser
 
