@@ -3,8 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from presail.config import IndexConfig, Thresholds
-from presail.index import compute_index, robust_z
+from mda.config import IndexConfig, Thresholds
+from mda.pipelines.index import compute_index, robust_z
 
 
 def _cfg(**overrides) -> IndexConfig:

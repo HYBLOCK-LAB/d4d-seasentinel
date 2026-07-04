@@ -7,8 +7,8 @@ from datetime import date, timedelta
 import httpx
 from dotenv import load_dotenv
 
-from presail.cache import cache_key, get_or_fetch
-from presail.paths import data_dir, repo_root
+from mda.paths import data_dir, repo_root
+from mda.store.cache import cache_key, get_or_fetch
 
 BASE = "https://gateway.api.globalfishingwatch.org/v3/4wings/report"
 CHUNK_DAYS = 180

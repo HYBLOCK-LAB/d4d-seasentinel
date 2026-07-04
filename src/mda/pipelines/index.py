@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from presail.config import IndexConfig
+from mda.config import IndexConfig
 
 MIN_BASELINE_POINTS = 30
 
@@ -45,7 +45,7 @@ def compute_index(signals: pd.DataFrame, cfg: IndexConfig) -> tuple[pd.DataFrame
             weight = cfg.weights.get(signal_name)
             if weight is None:
                 continue
-            series = wide[signal_name].fillna(0.0)
+            series = wide[signal_name].ffill(limit=cfg.ffill_max_days).fillna(0.0)
             z_clipped[signal_name] = robust_z(series, cfg)
 
         for day in full_index:

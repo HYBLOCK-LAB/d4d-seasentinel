@@ -43,6 +43,20 @@ class Event:
 
 
 @dataclass
+class Incident:
+    event_id: str
+    name: str
+    event_type: str
+    event_date: date
+    region_id: str
+    lat: float
+    lon: float
+    description: str
+    citations: list[str] = field(default_factory=list)
+    vessels: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Source:
     source_id: str
     kind: str
@@ -96,6 +110,10 @@ def load_events() -> list[Event]:
 
 def load_sources() -> list[Source]:
     return [_build(Source, item) for item in _load_yaml("sources.yaml")]
+
+
+def load_incidents() -> list[Incident]:
+    return [_build(Incident, item) for item in _load_yaml("incidents.yaml")]
 
 
 def load_index_config() -> IndexConfig:

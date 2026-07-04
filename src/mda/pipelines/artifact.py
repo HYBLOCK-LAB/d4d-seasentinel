@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from presail.config import Aoi, Event, IndexConfig
+from mda.config import Aoi, Event, IndexConfig
 
 TOP_EVIDENCE = 5
 

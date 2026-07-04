@@ -89,6 +89,9 @@ create table if not exists event (
     raw_ref text
 );
 
+alter table event add column if not exists region_id text;
+alter table event add column if not exists geom geometry(Point, 4326);
+
 create table if not exists backtest_config (
     event_id text primary key references event (event_id),
     search_days_before int not null,

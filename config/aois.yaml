@@ -1,20 +1,45 @@
 - aoi_id: hainan_staging
   name: Hainan staging ports (Sanya, Tanmen)
   role: staging
+  region_id: south_china_sea
   bbox: [109.3, 18.0, 111.0, 19.6]
   coords_verified: true
+  staging_for: [whitsun_reef, sabina_shoal]
+  queries:
+    gdelt_place_en: '"Sanya" OR "Tanmen"'
+    gdelt_place_zh: '"三亚" OR "潭门"'
+    gdelt_militia_en: '"maritime militia" ("Sanya" OR "Hainan" OR "Tanmen")'
+    gdelt_militia_zh: '"海上民兵" "海南"'
 - aoi_id: whitsun_reef
   name: Whitsun Reef / Julian Felipe Reef
   role: reef
+  region_id: south_china_sea
   bbox: [114.50, 9.83, 114.80, 10.13]
   coords_verified: true
+  queries:
+    gdelt_place_en: '("Whitsun Reef" OR "Julian Felipe Reef")'
+    gdelt_place_zh: '"牛轭礁"'
+    gdelt_militia_en: '"maritime militia" ("Whitsun Reef" OR "Julian Felipe Reef" OR "South China Sea")'
+    gdelt_militia_zh: '"海上民兵" ("南沙" OR "南海")'
 - aoi_id: scarborough_shoal
   name: Scarborough Shoal / Bajo de Masinloc
   role: reef
+  region_id: south_china_sea
   bbox: [117.62, 15.03, 117.92, 15.33]
   coords_verified: true
+  queries:
+    gdelt_place_en: '("Scarborough Shoal" OR "Bajo de Masinloc")'
+    gdelt_place_zh: '"黄岩岛"'
+    gdelt_militia_en: '"China Coast Guard" ("Scarborough Shoal" OR "Bajo de Masinloc")'
+    gdelt_militia_zh: '"海上民兵" ("南海")'
 - aoi_id: sabina_shoal
   name: Sabina Shoal / Escoda Shoal
   role: reef
+  region_id: south_china_sea
   bbox: [116.34, 9.61, 116.64, 9.91]
   coords_verified: true
+  queries:
+    gdelt_place_en: '("Sabina Shoal" OR "Escoda Shoal")'
+    gdelt_place_zh: '"仙宾礁"'
+    gdelt_militia_en: '"China Coast Guard" ("Sabina Shoal" OR "Escoda Shoal")'
+    gdelt_militia_zh: '"海上民兵" ("南沙" OR "南海")'

@@ -16,5 +16,6 @@ weights:
   gdelt_tone: 0.05
   gfw_presence_hours: 0.15
   gfw_sar_presence: 0.15
+  gfw_staging_presence_hours: 0.10
   gfw_ais_gap_count: 0.10
   gfw_port_visit_count: 0.05

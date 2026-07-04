@@ -1,0 +1,167 @@
+- event_id: yellow_sea_coast_guard_boat_sunk_2016
+  name: Chinese fishing boat rams and sinks ROK Coast Guard speedboat off Socheongdo
+  event_type: illegal_fishing
+  event_date: 2016-10-07
+  region_id: west_sea
+  lat: 37.75
+  lon: 124.73
+  description: A 100-ton Chinese fishing boat intentionally rammed and sank a 4.5-ton Korea Coast Guard speedboat about 76 km southwest of Socheongdo during an illegal-fishing crackdown; Korea called it attempted murder and protested to Beijing.
+  citations:
+    - "https://www.rand.org/pubs/commentary/2016/11/south-korea-cracks-down-on-illegal-chinese-fishing.html"
+- event_id: incheon_coast_guard_gunfire_chinese_boats_2016
+  name: Korea Coast Guard opens machine-gun fire on Chinese fishing fleet off Incheon
+  event_type: illegal_fishing
+  event_date: 2016-11-01
+  region_id: west_sea
+  lat: 37.5
+  lon: 124.9
+  description: KCG vessels fired 95 rounds from deck-mounted M60 machine guns into the air to stop about 30 illegally fishing Chinese boats off Incheon after several tried to ram the KCG vessel; two boats seized.
+  citations:
+    - "https://koreatimes.co.kr/www/news/nation/2016/11/116_217327.html"
+- event_id: lee_dae_jun_shooting_2020
+  name: North Korean troops shoot and kill ROK fisheries official Lee Dae-jun near NLL
+  event_type: nll_intrusion
+  event_date: 2020-09-22
+  region_id: west_sea
+  lat: 37.6653
+  lon: 125.6975
+  description: ROK fisheries official Lee Dae-jun drifted across the NLL into North Korean waters near Yeonpyeong Island and was shot and killed by North Korean soldiers, his body burned; Kim Jong Un later apologized.
+  citations:
+    - "https://www.npr.org/2020/09/24/916430659/north-korean-troops-shoot-dead-south-korean-man-believed-attempting-to-defect"
+- event_id: nll_illegal_fishing_surge_2022
+  name: Surge in illegal Chinese fishing boat crossings of the NLL West Sea border
+  event_type: illegal_fishing
+  event_date: 2022-03-30
+  region_id: west_sea
+  lat: 37.8
+  lon: 124.8
+  description: KCG data showed unlicensed Chinese fishing boats near the NLL averaging 65/day in March 2022, up from 25/day in January and a fourfold rise versus March 2020, having peaked at 110/day in March 2021.
+  citations:
+    - "https://www.koreaherald.com/article/2826560"
+- event_id: pmz_atlantic_amsterdam_platform_2022
+  name: China installs Atlantic Amsterdam platform in Yellow Sea PMZ
+  event_type: gray_zone
+  event_date: 2022-10-01
+  region_id: west_sea
+  lat: 36.5
+  lon: 123.7
+  description: China installed a repurposed offshore platform (Atlantic Amsterdam) inside the ROK-China Provisional Measures Zone as a deep-water aquaculture management platform without consulting Seoul; AMTI assessed possible functions beyond aquaculture.
+  vessels: [Atlantic Amsterdam]
+  citations:
+    - "https://amti.csis.org/chinese-platforms-in-the-yellow-seas-south-korea-china-pmz/"
+- event_id: nk_patrol_boat_nll_crossing_2023
+  name: North Korean patrol boat crosses NLL near Baengnyeong, ROK fires warning shots
+  event_type: nll_intrusion
+  event_date: 2023-04-15
+  region_id: west_sea
+  lat: 37.9598
+  lon: 124.6763
+  description: A North Korean patrol boat pursuing a Chinese fishing boat crossed the NLL near Baengnyeong; a ROK naval vessel fired about 10 warning shots and the boat retreated. A responding ROK craft collided with the Chinese boat in poor visibility.
+  citations:
+    - "https://www.aljazeera.com/news/2023/4/16/s-korea-fires-warning-shots-after-n-korean-boat-incursion"
+- event_id: pmz_shen_lan_2_cage_2024
+  name: China installs Shen Lan 2 aquaculture cage in Yellow Sea PMZ
+  event_type: gray_zone
+  event_date: 2024-05-01
+  region_id: west_sea
+  lat: 36.55
+  lon: 123.75
+  description: AIS tracking showed the Chinese aquaculture cage Shen Lan 2 towed from Qingdao and installed in the ROK-China PMZ, the second structure clustered around Atlantic Amsterdam; ROK vessels repeatedly approached to monitor.
+  vessels: [Shen Lan 2]
+  citations:
+    - "https://amti.csis.org/chinese-platforms-in-the-yellow-seas-south-korea-china-pmz/"
+- event_id: gps_jamming_west_sea_2024_05
+  name: North Korea GPS jamming campaign against West Sea border islands (May-June 2024)
+  event_type: gray_zone
+  event_date: 2024-05-29
+  region_id: west_sea
+  lat: 37.9598
+  lon: 124.6763
+  description: North Korea directed GPS jamming toward the five West Sea border islands near the NLL for four consecutive days, disrupting navigation for civilian aircraft and vessels; ROK JCS attributed it to North Korea.
+  citations:
+    - "https://www.koreatimes.co.kr/foreignaffairs/northkorea/20240601/north-korea-continues-gps-jamming-attack-for-4th-day"
+- event_id: han_river_estuary_defector_2024
+  name: North Korean defector crosses Han River estuary to Gyodong Island
+  event_type: infiltration
+  event_date: 2024-08-08
+  region_id: west_sea
+  lat: 37.7592
+  lon: 126.3169
+  description: A North Korean individual crossed the neutral Han River estuary on foot at low tide to Gyodong Island expressing intent to defect, a rarely used but recurring maritime infiltration route at the western end of the inter-Korean border.
+  citations:
+    - "https://www.upi.com/Top_News/World-News/2024/08/08/North-Korea-defector-Han-River-crossing-Gyodong-Island/5561723112015/"
+- event_id: gps_jamming_west_sea_2024_11
+  name: North Korea GPS jamming attack disrupts West Sea flights and shipping (Nov 2024)
+  event_type: gray_zone
+  event_date: 2024-11-09
+  region_id: west_sea
+  lat: 37.9598
+  lon: 124.6763
+  description: ROK military detected a new North Korean GPS jamming operation from November 2024 affecting several vessels and dozens of civilian aircraft near the NLL border islands, part of a surge from 39 incidents in 2023 to 578 in 2024.
+  citations:
+    - "https://www.aljazeera.com/news/2024/11/9/south-koreas-military-blames-north-korea-on-gps-signal-jamming-attack"
+- event_id: onnuri_pmz_standoff_2025
+  name: China Coast Guard blocks Korean research vessel Onnuri near PMZ steel structure
+  event_type: gray_zone
+  event_date: 2025-02-26
+  region_id: west_sea
+  lat: 36.5
+  lon: 123.7
+  description: The KIOST research vessel Onnuri was blocked for about two hours by Chinese coast guard ships and rubber boats when it tried to approach within 1 km of an unauthorized Chinese steel structure in the Yellow Sea PMZ; no violence occurred.
+  vessels: [Onnuri]
+  citations:
+    - "https://www.koreatimes.co.kr/www/nation/2025/03/113_394524.html"
+- event_id: gps_jamming_baengnyeong_2025_06
+  name: North Korea GPS jamming near Baengnyeong during ROK presidential transition
+  event_type: gray_zone
+  event_date: 2025-05-29
+  region_id: west_sea
+  lat: 37.9598
+  lon: 124.6763
+  description: North Korea conducted a major GPS jamming campaign from 29 May to 2 June 2025 affecting over 500 aircraft and hundreds of ships, directed at Baengnyeong Island and the ROK 6th Marine Brigade near the NLL during the ROK presidential transition.
+  citations:
+    - "https://www.nknews.org/2025/06/north-korea-appears-to-jam-gps-signals-near-sea-border-ahead-of-rok-election/"
+- event_id: nk_vessel_toksong_nll_crossing_2025
+  name: North Korean merchant vessel Toksong crosses NLL near Baengnyeong, spoofs AIS flag
+  event_type: nll_intrusion
+  event_date: 2025-09-26
+  region_id: west_sea
+  lat: 37.9
+  lon: 124.7
+  description: The North Korean merchant vessel Toksong crossed the NLL near Baengnyeong, advancing up to 5 km south for about an hour; after ignored warnings a ROK Navy vessel fired about 60 warning shots. The vessel had altered its AIS-transmitted flag from North Korean to Chinese to conceal its identity.
+  vessels: [Toksong]
+  citations:
+    - "https://www.nknews.org/2025/09/rok-fires-warning-shots-after-north-korean-merchant-ship-crosses-sea-border/"
+- event_id: yi_peng_3_baltic_cable_2024
+  name: Yi Peng 3 suspected of severing C-Lion1 and BCS East-West Interlink cables
+  event_type: cable_incident
+  event_date: 2024-11-17
+  region_id: baltic
+  lat: 55.5
+  lon: 18.9
+  description: The Chinese bulk carrier Yi Peng 3 sailed directly over the C-Lion1 and BCS East-West Interlink cables around the time they were cut on 17-18 November 2024; officials suspect anchor dragging, possibly under Russian direction, and the ship was shadowed in the Kattegat before departing.
+  vessels: [Yi Peng 3]
+  citations:
+    - "https://en.wikipedia.org/wiki/2024_Baltic_Sea_submarine_cable_disruptions"
+- event_id: eagle_s_estlink2_cable_2024
+  name: Eagle S drags anchor, severs Estlink2 power cable and telecom cables in Gulf of Finland
+  event_type: cable_incident
+  event_date: 2024-12-25
+  region_id: baltic
+  lat: 59.8
+  lon: 25.5
+  description: The Cook Islands-flagged shadow-fleet tanker Eagle S allegedly dragged its anchor about 90 km, severing the Estlink2 Finland-Estonia power interconnector and four telecom cables; Finland detained the vessel and charged its officers, with damage over 70 million euros.
+  vessels: [Eagle S]
+  citations:
+    - "https://en.wikipedia.org/wiki/2024_Estlink_2_incident"
+- event_id: vezhen_baltic_cable_2025
+  name: Vezhen anchor incident damages Gotland-Ventspils data cable
+  event_type: cable_incident
+  event_date: 2025-01-26
+  region_id: baltic
+  lat: 57.0
+  lon: 19.5
+  description: Damage to the Gotland-Ventspils fiber cable was found on 26 January 2025; Sweden detained the Malta-flagged Vezhen on suspicion of sabotage but concluded on 3 February it was an accident from weather and a malfunctioning anchor-release device, and released the ship.
+  vessels: [Vezhen]
+  citations:
+    - "https://www.washingtonpost.com/world/2025/01/27/sweden-latvia-baltic-cable-damage/"

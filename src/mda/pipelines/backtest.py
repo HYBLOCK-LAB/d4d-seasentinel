@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from presail.config import Event, IndexConfig
+from mda.config import Event, IndexConfig
 
 EVENT_GUARD_DAYS = 21
 PEAK_WINDOW_BEFORE = 14

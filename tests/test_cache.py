@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from presail.cache import cache_key, get_or_fetch
+from mda.store.cache import cache_key, get_or_fetch
 
 
 def test_get_or_fetch_writes_then_reads(tmp_path):

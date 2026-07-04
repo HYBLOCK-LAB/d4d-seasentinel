@@ -7,8 +7,8 @@ from datetime import date, datetime, timedelta
 
 import httpx
 
-from presail.cache import cache_key, get_or_fetch
-from presail.paths import data_dir
+from mda.paths import data_dir
+from mda.store.cache import cache_key, get_or_fetch
 
 BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 CHUNK_DAYS = 365
@@ -27,6 +27,10 @@ def _throttle() -> None:
     _last_call = time.monotonic()
 
 
+class GdeltThrottled(RuntimeError):
+    pass
+
+
 def _request(query: str, mode: str, start: str, end: str) -> dict:
     params = {
         "query": query,
@@ -35,7 +39,6 @@ def _request(query: str, mode: str, start: str, end: str) -> dict:
         "startdatetime": start,
         "enddatetime": end,
     }
-    empty = {"timeline": []}
     for attempt in range(MAX_RETRIES):
         _throttle()
         resp = httpx.get(BASE, params=params, timeout=60.0)
@@ -52,8 +55,7 @@ def _request(query: str, mode: str, start: str, end: str) -> dict:
             return json.loads(body)
         except json.JSONDecodeError:
             time.sleep(BACKOFF_SECONDS)
-    print(f"GDELT: no parseable response after {MAX_RETRIES} tries, empty for {query!r} {mode}", file=sys.stderr)
-    return empty
+    raise GdeltThrottled(f"{query!r} {mode} throttled after {MAX_RETRIES} tries")
 
 
 def _parse_date(raw: str) -> date:
@@ -87,10 +89,14 @@ def _fetch_mode(query: str, mode: str, start: date, end: date) -> dict[date, dic
     for chunk_start, chunk_end in _chunks(start, end):
         key = cache_key(query, mode, _stamp(chunk_start), _stamp(chunk_end))
         path = data_dir("raw", "gdelt", f"{key}.json")
-        payload = get_or_fetch(
-            path,
-            lambda: _request(query, mode, _stamp(chunk_start), _stamp(chunk_end)),
-        )
+        try:
+            payload = get_or_fetch(
+                path,
+                lambda: _request(query, mode, _stamp(chunk_start), _stamp(chunk_end)),
+            )
+        except GdeltThrottled as exc:
+            print(f"GDELT skip (uncached): {exc}", file=sys.stderr)
+            continue
         merged.update(_points(payload))
     return merged
 

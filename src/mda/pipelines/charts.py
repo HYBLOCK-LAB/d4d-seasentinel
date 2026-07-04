@@ -10,8 +10,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from presail.config import Event, IndexConfig
-from presail.paths import repo_root
+from mda.config import Event, IndexConfig
+from mda.paths import repo_root
 
 WINDOW_PAD_DAYS = 20
 
