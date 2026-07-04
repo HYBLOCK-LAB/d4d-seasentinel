@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 
 import yaml
+
+from presail.paths import repo_root
 
 
 @dataclass
@@ -45,15 +46,8 @@ class IndexConfig:
     weights: dict[str, float]
 
 
-def _repo_root() -> Path:
-    for candidate in (Path(__file__).resolve(), *Path(__file__).resolve().parents):
-        if (candidate / "pyproject.toml").is_file():
-            return candidate
-    raise FileNotFoundError("pyproject.toml not found in any parent directory")
-
-
 def _load_yaml(relative_path: str):
-    path = _repo_root() / relative_path
+    path = repo_root() / relative_path
     with path.open() as f:
         return yaml.safe_load(f)
 
