@@ -167,6 +167,7 @@ def _cmd_run(args) -> None:
     artifact_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2))
     if not args.no_persist:
         print("persisted:", persist.persist_run(signals, index_df, contrib_df))
+        persist.persist_backtests(backtests)
     for b in backtests:
         print(f"  {b['event_id']}: lead={b.get('lead_time_days')} peak={b.get('peak_index')}")
 

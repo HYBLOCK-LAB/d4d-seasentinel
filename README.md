@@ -1,115 +1,121 @@
-# Pre-Sail Index
+# MDA Ontology Platform
 
-Early-warning index for maritime gray-zone escalation in the South China Sea.
-It fuses free open-source signals into a per-location "pre-sail" score (0-100)
-that rises **before** documented militia massing events, giving watch officers
-lead time instead of after-the-fact situational awareness.
+An extensible maritime-domain-awareness (MDA) data ontology for the F4GE tracks
+**"unstructured-data dark/disguised-vessel detection"** and **"OSINT gray-zone
+early warning"**. It fuses many free/real feeds into one entity-centric store
+(PostGIS), runs track-1/track-2 analysis on top, and drives a real-time
+intelligence dashboard. Priority theatre: the Korean **West Sea (Yellow Sea)**;
+global coverage where the source allows. Users: ROK military.
 
-The thesis: a militia sortie is preceded by observable precursors — a rise in
-physical vessel presence at the target reef and a rise in multilingual news
-chatter. Physical presence (satellite/AIS) tends to lead the news cycle. The
-index quantifies and fuses both, then backtests against real 2021 and 2024
-events to show the signal crossed a WATCH threshold days ahead.
+This merges two prior systems — a GDELT+GFW **pre-sail escalation index** (batch,
+causal, backtested) and **SEASENTINEL** (a Palantir-Gotham-style triage
+dashboard) — and replaces SEASENTINEL's synthetic inputs with real data.
 
-## Data sources (all free, no scraping)
+## Architecture (three layers)
 
-| Signal | Source | Access |
+1. **System of record** — a dedicated `postgis/postgis` container on beelink
+   (`compose.yml`, port 5434). Holds every curated entity + observation +
+   derived signal. Schema is one file: `src/mda/ontology/schema.sql` (25 tables),
+   designed 1:1 with Palantir Foundry ObjectTypes.
+2. **Firehose overflow** — a local partitioned parquet lake (`data/lake/`) for the
+   global AIS stream when enabled (`--to-lake`); the West Sea stream lands
+   full-fidelity in Postgres.
+3. **Semantic ontology (Foundry)** — bounded curated objects sync on top
+   (`mda foundry-sync`), MCP-gated (types designed once Palantir MCP is enabled).
+
+## Data sources (all real)
+
+| Feed | Source | Access |
 |---|---|---|
-| News volume + tone (EN + ZH) | [GDELT DOC 2.0 API](https://www.gdeltproject.org/) | No key |
-| AIS vessel presence (hours/day) | [Global Fishing Watch 4Wings API](https://globalfishingwatch.org/our-apis/) | Free bearer token |
-| SAR satellite detections (count/day) | Global Fishing Watch SAR presence | Free bearer token |
+| Realtime AIS positions/identity | [AISStream.io](https://aisstream.io) WebSocket | free key |
+| AIS/SAR daily aggregates | Global Fishing Watch 4Wings | bearer token |
+| News volume/tone (EN+ZH) | GDELT DOC 2.0 | no key |
+| Darkweb/Telegram OSINT | StealthMole Telegram Tracker | per-request JWT |
+| Marine + weather (wave/wind) | Open-Meteo | no key |
+| Sanctioned vessels | OFAC SDN + UN 1718 (DPRK) | public |
+| Ports | NGA World Port Index | public |
+| Submarine cables | TeleGeography cable map | public |
+| Coastline | Natural Earth | public |
+| Curated West Sea incidents | CSIS/AMTI, Coast Guard, news (cited) | `config/incidents.yaml` |
 
-Everything is pulled through documented public APIs. No web scraping, no paid
-feeds. GFW usage is under its non-commercial API terms.
+## Ontology (schema.sql)
+
+- **Entities**: `vessel` (+`vessel_registry_snapshot`), `facility`, `zone`,
+  `event` (+`backtest_config`), `document`, `alert` (+`alert_timeline_step`),
+  generic `entity_link`.
+- **Observations**: `ais_position`, `sar_detection`, `signal_daily`,
+  `weather_daily`, `osint_item`.
+- **Derived (versioned)**: `index_daily`, `index_contribution`,
+  `backtest_result`, `method_registry`.
+- Every row carries provenance (`source_id, collector, fetched_at, raw_ref`).
+  Geometry is PostGIS (`ST_Contains`/`ST_DWithin` power geofence + proximity).
 
 ## Setup
 
 ```
 uv sync
-cp .env.example .env       # then paste your GFW token into GFW_TOKEN
+cp .env.example .env    # fill AISSTREAM_API_KEY, STEALTHMOLE_*, GFW_TOKEN, MDA_PG_DSN
+uv run mda init-db      # apply schema to Postgres
 ```
 
-Get a free GFW token at https://globalfishingwatch.org/our-apis/tokens.
-Without a token the pipeline still runs in `--gdelt-only` mode.
-
-## Run the full pipeline + backtest
+## Collect (each writes real rows to the ontology)
 
 ```
-uv run python -m presail.cli run --start 2020-08-01 --end 2024-12-31
+uv run mda migrate                                   # legacy GDELT/GFW/index → DB
+uv run mda run --start 2020-08-01 --end 2024-12-31   # pre-sail index + backtest → DB
+uv run mda ais-stream --regions west_sea --duration 900
+uv run mda collect-weather --start 2020-08-01 --end 2024-12-31
+uv run mda collect-reference                         # OFAC + UN1718 + WPI + cables + incidents
+uv run mda collect-stealthmole --max-items 200
+uv run mda analyze                                   # track-1/2 alerts (dark-vessel, cable, sanctions)
 ```
 
-This fetches (and caches) all signals, builds the index, backtests the three
-events, renders charts to `charts/`, and writes `data/artifacts/latest.json`
-(the schema-1.0 contract consumed by the dashboard phase).
-
-Individual stages:
+## Dashboard (real data)
 
 ```
-uv run python -m presail.cli fetch-gdelt --query '("Whitsun Reef" OR "Julian Felipe Reef")' --start 2021-01-01 --end 2021-04-01
-uv run python -m presail.cli fetch-gfw --aoi hainan_staging --start 2021-02-20 --end 2021-03-10
-uv run python -m presail.cli build-index --start 2020-08-01 --end 2024-12-31
-uv run python -m presail.cli backtest
+uv run mda export-dashboard --region west_sea --hours 72   # DB → dashboard/data/*.json
+cd dashboard && PORT=3011 uv run python server.py
 ```
 
-All API responses cache to `data/raw/`; re-runs are offline and instant.
+The SEASENTINEL frontend is unchanged except its time axis now derives from the
+exported window; TRIAGE, dark-vessel detection, geofence intrusion, SAR↔AIS
+matching, entity graph, and the LLM copilot all run over real data.
 
-## Methodology
+## Foundry sync (MCP-gated)
 
-Per signal, per day, a robust z-score is computed against a **180-day trailing
-baseline with a 14-day embargo** (median/MAD), so an in-progress buildup never
-contaminates its own baseline. Positive deviations are clipped to [0, 6];
-"quieter than usual" contributes nothing to an escalation score. The clipped
-z-scores are weight-averaged (weights in `config/index.yaml`) and passed
-through a saturating transform to a 0-100 index. The composite headline score
-is the **max** across locations (a sortie is an OR across staging areas).
+```
+uv run mda foundry-sync    # dry-run until FOUNDRY_HOST/TOKEN set + MCP enabled
+```
 
-Every value feeding `index[t]` comes from strictly before `t` — the causality
-guarantee is enforced by `tests/test_index.py` (no-lookahead test).
+Syncs a bounded set (observed+sanctioned vessels, events, alerts, sanctions
+docs, daily index) — never the raw AIS firehose.
 
-## Backtest events
+## Pre-sail index findings (real backtest, index.v1)
 
-| event | date | location |
-|---|---|---|
-| Whitsun Reef militia massing (~220 vessels) | 2021-03-07 | Whitsun / Julian Felipe Reef |
-| Scarborough Shoal water-cannon escalation | 2024-04-30 | Scarborough Shoal |
-| Sabina/Escoda Shoal escalation (203 vessels) | 2024-08-31 | Sabina Shoal |
+| event | lead | peak | note |
+|---|---|---|---|
+| Sabina/Escoda 2024 | **45 days** | 96.3 | sustained massing — weeks of early warning |
+| Scarborough 2024 | 42 days | 87.8 | staging-port + news precursors now lead the incident |
+| Whitsun 2021 | none | 32.6 | AIS-dark militia — the gap that motivates SAR/OSINT fusion |
 
-Metrics: **lead time** (days the index crossed WATCH before the event), peak
-percentile vs the location's own baseline, and false-positive episodes in
-quiet periods.
-
-## Findings (real-data backtest)
-
-| event | pattern | result |
-|---|---|---|
-| Sabina/Escoda 2024 | prolonged multi-week massing | **WATCH crossed ~45 days before** the Aug 31 escalation, sustained ALERT through it |
-| Scarborough 2024 | sudden water-cannon incident | same-day ALERT detection (no early warning — a discrete event) |
-| Whitsun Reef 2021 | AIS-dark militia | AIS presence stayed flat (vessels went dark); index fired only when news broke — the hard case that motivates SAR/OSINT fusion |
-
-The honest narrative is stronger than "everything triggered": the system buys
-weeks of warning for the sustained massing operations that can actually be
-pre-empted (Sabina), detects sudden incidents on the day (Scarborough), and
-transparently exposes the dark-vessel gap (Whitsun) where AIS alone is blind.
-
-## Honest scope
-
-- Two of the planned GFW signals (AIS-gap and port-visit events) require an
-  Events-API permission tier this token does not have (HTTP 403). The index
-  runs on **seven signals** (five GDELT + AIS presence + SAR presence) and
-  renormalizes weights over whatever signals are available.
-- With three labeled events this is a **case study**, not a statistically
-  powered ROC/PR evaluation. It demonstrates the signal exists and leads; it
-  does not claim a tuned production detector.
-- Reef bounding boxes were verified against published coordinates and
-  confirmed empirically (vessel presence spikes on the event dates).
-- GDELT enforces a strict ~1-request/5s rate limit. The client throttles and
-  backs off; a cold full build takes a few minutes. Chinese-language queries
-  that miss the cache during a rate-limit window fall back to empty and simply
-  drop out of the weighted average (English + AIS + SAR still carry the index).
-  Re-running once the limit clears fills them in.
+`hainan_staging` is now wired: its AIS presence feeds the reef indices as a
+`gfw_staging_presence_hours` signal (rear-port precursor). Every value feeding
+`index[t]` comes strictly from before `t` (no-lookahead test enforced).
 
 ## Tests
 
 ```
-uv run pytest
+uv run pytest    # 30 tests
 ```
+
+## Honest scope / known gaps
+
+- **SAR per-detection**: GFW gives daily aggregates only; `sar.json` stays empty
+  until a real per-detection feed (e.g. Sentinel-1) is integrated — never synthetic.
+- **NLL geofence**: no authoritative public coordinate list exists; not fabricated.
+- **ffill tradeoff**: applying `ffill_max_days` to sparse signals raised lead time
+  but also false-positive episodes; signal-specific ffill is a future tuning knob.
+- **Chinese GDELT / Hainan GDELT** can fall back to empty under GDELT's rate limit;
+  re-run after cooldown (throttle never poisons the cache).
+- Synthetic SEASENTINEL data is preserved under `simulation/` for scenario replay,
+  never mixed into the real store.

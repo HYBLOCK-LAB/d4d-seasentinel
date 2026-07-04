@@ -24,6 +24,33 @@ def _signal_source(signal_name: str) -> str:
     return "derived"
 
 
+def persist_backtests(backtests: list[dict]) -> int:
+    rows = [
+        {
+            "event_id": b["event_id"],
+            "method_version": METHOD,
+            "lead_time_days": b.get("lead_time_days"),
+            "peak_index": b.get("peak_index"),
+            "peak_date": date.fromisoformat(b["peak_date"]) if b.get("peak_date") else None,
+            "peak_percentile": b.get("peak_percentile"),
+            "false_positive_episodes": b.get("false_positive_episodes"),
+        }
+        for b in backtests
+        if "lead_time_days" in b
+    ]
+    if not rows:
+        return 0
+    with pg.connect() as conn:
+        pg.upsert(
+            conn,
+            "backtest_result",
+            rows,
+            conflict=["event_id", "method_version"],
+            update=["lead_time_days", "peak_index", "peak_date", "peak_percentile", "false_positive_episodes"],
+        )
+    return len(rows)
+
+
 def persist_run(signals_df: pd.DataFrame, index_df: pd.DataFrame, contrib_df: pd.DataFrame) -> dict[str, int]:
     chash = config_hash()
     signal_rows = [
