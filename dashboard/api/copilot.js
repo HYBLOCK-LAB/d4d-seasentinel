@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   const { query, context, model } = req.body || {};
   if (!query) return res.status(400).json({ error: "empty query" });
   const base = process.env.LLM_BASE_URL, key = process.env.LLM_API_KEY;
-  const mdl = model || process.env.LLM_MODEL || "gemini-2.5-flash";
+  const mdl = model || process.env.LLM_MODEL || "gpt-5.4";
   if (!base || !key) return res.status(502).json({ error: "no llm config (set LLM_BASE_URL / LLM_API_KEY)" });
   const user = `[현재 상황 컨텍스트]\n${context || ""}\n\n[지휘관 질의]\n${query}`;
   let upstream;

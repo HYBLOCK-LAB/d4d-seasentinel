@@ -20,7 +20,10 @@ try:
     CFG = json.load(open(os.path.join(ROOT, ".secrets", "llm.json")))
 except Exception as e:
     CFG = {}
-    print("WARN: .secrets/llm.json not loaded —", e, "→ copilot will 502, frontend falls back to rules")
+    print("WARN: .secrets/llm.json not loaded —", e, "→ env vars / rule fallback")
+CFG["base_url"] = os.environ.get("LLM_BASE_URL", CFG.get("base_url"))
+CFG["api_key"] = os.environ.get("LLM_API_KEY", CFG.get("api_key"))
+CFG["model"] = os.environ.get("LLM_MODEL", CFG.get("model") or "gpt-5.4")
 
 SYSTEM_PROMPT = """당신은 대한민국 해양영역인식(MDA) 지휘결심 지원 분석관입니다.
 'SEASENTINEL' 시스템이 제공하는 실시간 상황 컨텍스트(위협 경보·선박·OSINT·현재 시각)를 근거로만 답하세요.
@@ -58,7 +61,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.startswith("/api/health"):
-            return self._json(200, {"ok": bool(CFG), "model": CFG.get("model")})
+            return self._json(200, {"ok": bool(CFG.get("api_key")), "model": CFG.get("model")})
+        if self.path.startswith("/api/models"):
+            return self._models()
         if self._denied(self.path):
             return self._json(403, {"error": "forbidden"})
         return super().do_GET()
@@ -70,9 +75,25 @@ class Handler(SimpleHTTPRequestHandler):
             return self._generate()
         return self._json(404, {"error": "not found"})
 
-    def _llm_text(self, messages, max_tokens=900):
+    def _models(self):
+        if not CFG.get("api_key"):
+            return self._json(200, {"models": [CFG.get("model") or "gpt-5.4"], "default": CFG.get("model")})
+        up = urllib.request.Request(
+            CFG["base_url"].rstrip("/") + "/models",
+            headers={"Authorization": "Bearer " + CFG["api_key"],
+                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"},
+        )
+        junk = {"high", "low", "medium", "gemini", "gpt", "chat_20706", "chat_23310"}
+        try:
+            d = json.loads(urllib.request.urlopen(up, timeout=20).read())
+            ids = sorted({m["id"] for m in d.get("data", []) if "/" not in m["id"] and m["id"] not in junk and any(c.isdigit() for c in m["id"])})
+        except Exception as e:
+            print("models err:", str(e)[:120]); ids = []
+        return self._json(200, {"models": ids or [CFG.get("model")], "default": CFG.get("model")})
+
+    def _llm_text(self, messages, max_tokens=900, model=None):
         """Non-streaming completion → full text (or None on error)."""
-        payload = {"model": CFG.get("model"), "stream": False, "temperature": 0.4, "max_tokens": max_tokens, "messages": messages}
+        payload = {"model": model or CFG.get("model"), "stream": False, "temperature": 0.4, "max_tokens": max_tokens, "messages": messages}
         up = urllib.request.Request(
             CFG["base_url"].rstrip("/") + "/chat/completions",
             data=json.dumps(payload).encode(),
@@ -95,7 +116,7 @@ class Handler(SimpleHTTPRequestHandler):
             req = json.loads(self.rfile.read(n) or b"{}")
         except Exception:
             return self._json(400, {"error": "bad request"})
-        task = req.get("task"); context = req.get("context") or ""
+        task = req.get("task"); context = req.get("context") or ""; model = req.get("model")
         if task == "osint":
             sysp = ("당신은 해양 OSINT 분석관입니다. 주어진 상황 컨텍스트를 근거로, 추가 조사가 필요한 "
                     "공개출처정보(OSINT) 첩보 가설 4개를 생성하세요. 각 항목은 실제 확인된 사실이 아닌 "
@@ -109,7 +130,7 @@ class Handler(SimpleHTTPRequestHandler):
                     '"edges":[{"source":"id","target":"id","rel":"관계(한국어 동사구)"}]}. 4~7개 노드, 표적과 연결.')
         else:
             return self._json(400, {"error": "unknown task"})
-        text = self._llm_text([{"role": "system", "content": sysp}, {"role": "user", "content": context}], 900)
+        text = self._llm_text([{"role": "system", "content": sysp}, {"role": "user", "content": context}], 900, model)
         if not text:
             return self._json(502, {"error": "upstream"})
         # extract JSON (strip fences / surrounding prose)

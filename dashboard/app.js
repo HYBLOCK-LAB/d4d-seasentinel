@@ -16,6 +16,7 @@ let D = null; // dataset
 let byId = {};
 const HERO = new Set(["v_shunxin39", "v_deoksong", "v_deyi", "v_huixin", "v_chonmasan", "v_eagles", "v_yipeng3", "v_vezhen"]);
 let CFG_MODEL = "LLM";
+let SEL_MODEL = null;   // user-selected LLM model (null = server default)
 
 async function loadAll() {
   const names = ["regions", "coast", "vessels", "tracks", "sar", "osint", "infrastructure", "alerts", "graph", "meta"];
@@ -395,7 +396,7 @@ async function genGraph() {
   const ctx = v ? `표적: ${v.name_ko || v.name_en} (id ${focus}). 기국 ${v.flag}${v.flag_history && v.flag_history.length > 1 ? ", 세탁이력 " + v.flag_history.join("→") : ""}. 별칭 ${(v.aliases || []).join(", ") || "없음"}. 소유 ${v.owner || "-"}. ${v.note || ""}` : `표적 id ${focus}`;
   const btn = $("#ai-graph-btn"); if (btn) { btn.disabled = true; btn.textContent = "🧠 AI 확장 중…"; }
   try {
-    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "graph", context: ctx }) });
+    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "graph", context: ctx, model: SEL_MODEL }) });
     const j = await res.json();
     if (j.ok && j.data && Array.isArray(j.data.nodes)) { state.aiGraph = { focus, nodes: j.data.nodes, edges: j.data.edges || [] }; toast(`🧠 AI 관계 ${j.data.nodes.length}개 노드 확장`); }
     else toast("AI 관계 확장 실패");
@@ -445,7 +446,7 @@ function renderGraph() {
 async function genOsint() {
   const btn = $("#ai-osint-btn"); if (btn) { btn.disabled = true; btn.textContent = "🧠 AI 분석 중…"; }
   try {
-    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "osint", context: buildCopilotContext() }) });
+    const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "osint", context: buildCopilotContext(), model: SEL_MODEL }) });
     const j = await res.json();
     if (j.ok && Array.isArray(j.data)) { state.aiOsint = j.data.map(o => ({ ...o, ai: true, region: state.region, h: state.H })); toast(`🧠 AI OSINT 첩보 가설 ${j.data.length}건 생성`); }
     else toast("AI OSINT 생성 실패");
@@ -519,7 +520,7 @@ async function runCopilot(q) {
   const ctx = buildCopilotContext();
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 60000);
   try {
-    const res = await fetch("/api/copilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, context: ctx }), signal: ctrl.signal });
+    const res = await fetch("/api/copilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q, context: ctx, model: SEL_MODEL }), signal: ctrl.signal });
     if (!res.ok || !res.body) throw new Error("http " + res.status);
     badge.textContent = "● 실시간 LLM";
     const reader = res.body.getReader(); const dec = new TextDecoder();
@@ -695,6 +696,12 @@ function openPipeline() {
 async function boot() {
   await loadAll();
   fetch("/api/health").then(r => r.json()).then(h => { if (h && h.model) CFG_MODEL = h.model; }).catch(() => { });
+  fetch("/api/models").then(r => r.json()).then(m => {
+    const sel = $("#cp-model"); if (!sel || !m.models) return;
+    SEL_MODEL = m.default || m.models[0];
+    m.models.forEach(id => { const o = el("option", { value: id }, id); if (id === SEL_MODEL) o.selected = true; sel.append(o); });
+    sel.onchange = () => { SEL_MODEL = sel.value; CFG_MODEL = sel.value; toast("LLM 모델 → " + sel.value); };
+  }).catch(() => { });
   // KPIs meta
   $("#meta-line").innerHTML = `추적 선박 <b>${D.meta.counts.vessels}</b> · AIS <b>${D.meta.counts.ais_points.toLocaleString()}</b> · SAR <b>${D.meta.counts.sar_detections}</b>(미매칭 ${D.meta.counts.sar_mismatch}) · OSINT <b>${D.meta.counts.osint}</b>`;
   // region toggle

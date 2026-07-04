@@ -7,11 +7,11 @@ const PROMPTS = {
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "method" });
-  const { task, context } = req.body || {};
+  const { task, context, model } = req.body || {};
   const sysp = PROMPTS[task];
   if (!sysp) return res.status(400).json({ error: "unknown task" });
   const base = process.env.LLM_BASE_URL, key = process.env.LLM_API_KEY;
-  const mdl = process.env.LLM_MODEL || "gemini-2.5-flash";
+  const mdl = model || process.env.LLM_MODEL || "gpt-5.4";
   if (!base || !key) return res.status(502).json({ error: "no llm config" });
   let text;
   try {

@@ -1,0 +1,19 @@
+ontology_rid: ri.ontology.main.ontology.b01ad177-c191-43a5-a56f-333803b8598b
+project_rid: ri.compass.main.folder.ab33136e-400e-4013-8243-491a84fcef8c
+project_path: /drmr-5f9a03/Maritime MDA Ontology
+branch_rid: ri.branch..branch.55955e1b-6d79-45f9-bebd-7e3426c0146b
+proposal_rid: ri.branch..proposal.49594774-d660-4f4d-b4c9-8ae832aec886
+datasets:
+  vessel: ri.foundry.main.dataset.1ff61407-5dce-4e68-a0fd-537ebe18948a
+  facility: ri.foundry.main.dataset.bc2358a2-56d4-41ee-9dba-2a24ae962eef
+  event: ri.foundry.main.dataset.5cfdb208-6ca6-48e5-a4a4-e8d32d60b31a
+  alert: ri.foundry.main.dataset.cd5ffe44-6648-4c61-810d-f16ad09d8480
+  zone: ri.foundry.main.dataset.d7b2c4cc-7547-4309-8121-7f6a4bd3c8c4
+object_types:
+  vessel: aozuvv5q.vessel
+  facility: aozuvv5q.facility
+  event: aozuvv5q.event
+  alert: aozuvv5q.alert
+  zone: aozuvv5q.zone
+link_types:
+  vessel_to_alert: aozuvv5q.vessel-to-alert
