@@ -11,8 +11,9 @@ from presail.paths import data_dir
 
 BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 CHUNK_DAYS = 365
-MIN_INTERVAL = 5.0
-MAX_RETRIES = 6
+MIN_INTERVAL = 6.0
+BACKOFF_SECONDS = 30.0
+MAX_RETRIES = 8
 
 _last_call = 0.0
 
@@ -38,7 +39,7 @@ def _request(query: str, mode: str, start: str, end: str) -> dict:
         resp = httpx.get(BASE, params=params, timeout=60.0)
         body = resp.text.strip()
         if resp.status_code == 429 or body.startswith("Please limit"):
-            time.sleep(MIN_INTERVAL * (attempt + 2))
+            time.sleep(BACKOFF_SECONDS)
             continue
         resp.raise_for_status()
         if not body:
