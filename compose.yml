@@ -21,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dashboard
+    image: d4d-mda-dashboard
     restart: unless-stopped
     network_mode: host
     command: ["uvicorn", "mda.api.app:app", "--host", "0.0.0.0", "--port", "8123"]
@@ -29,6 +30,17 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL}
       MDA_PG_DSN: postgresql://mda:${MDA_PG_PASSWORD}@localhost:5434/mda
+
+  collector:
+    image: d4d-mda-dashboard
+    restart: unless-stopped
+    network_mode: host
+    command: ["python", "-m", "mda.cli", "ais-stream", "--regions", "west_sea"]
+    environment:
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY}
+      MDA_PG_DSN: postgresql://mda:${MDA_PG_PASSWORD}@localhost:5434/mda
+    depends_on:
+      - dashboard
 
 volumes:
   mda_pgdata:

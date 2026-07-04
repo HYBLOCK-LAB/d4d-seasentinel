@@ -226,16 +226,29 @@ export function Timebar() {
   const applyPreset = useCallback(
     (key: PresetKey) => {
       setActivePreset(key);
-      if (key === 'ALL') {
-        setDomain({ start: state.fullRange.start, end: state.fullRange.end });
-        return;
-      }
-      const windowEndMs = new Date(state.window.end).getTime();
       const fullStartMs = new Date(state.fullRange.start).getTime();
-      const startMs = Math.max(fullStartMs, windowEndMs - PRESET_MS[key]);
-      setDomain({ start: new Date(startMs).toISOString(), end: new Date(windowEndMs).toISOString() });
+      const fullEndMs = new Date(state.fullRange.end).getTime();
+      const nextDomain =
+        key === 'ALL'
+          ? { start: state.fullRange.start, end: state.fullRange.end }
+          : {
+              start: new Date(Math.max(fullStartMs, fullEndMs - PRESET_MS[key])).toISOString(),
+              end: state.fullRange.end,
+            };
+      setDomain(nextDomain);
+      const dStart = new Date(nextDomain.start).getTime();
+      const dEnd = new Date(nextDomain.end).getTime();
+      const wStart = new Date(state.window.start).getTime();
+      const wEnd = new Date(state.window.end).getTime();
+      if (wEnd < dStart || wStart > dEnd) {
+        const span = Math.min(wEnd - wStart, dEnd - dStart);
+        dispatch({
+          type: 'window',
+          window: { start: new Date(dEnd - span).toISOString(), end: new Date(dEnd).toISOString() },
+        });
+      }
     },
-    [state.window.end, state.fullRange.start, state.fullRange.end]
+    [state.window.start, state.window.end, state.fullRange.start, state.fullRange.end, dispatch]
   );
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {

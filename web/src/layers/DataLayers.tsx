@@ -216,7 +216,7 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
         id: src,
         type: 'circle',
         source: src,
-        paint: { 'circle-radius': 2.5, 'circle-color': COLORS.steel, 'circle-opacity': 0.6 },
+        paint: { 'circle-radius': 2.5, 'circle-color': COLORS.bright, 'circle-opacity': 0.75 },
       })
       break
   }
@@ -318,6 +318,18 @@ export default function DataLayers() {
       }
     }
   }, [map, dispatch])
+
+  useEffect(() => {
+    const endMs = new Date(state.window.end).getTime()
+    if (Date.now() - endMs > 2 * 3600_000) return
+    const id = window.setInterval(() => {
+      dispatch({
+        type: 'window',
+        window: { start: state.window.start, end: new Date().toISOString() },
+      })
+    }, 60_000)
+    return () => window.clearInterval(id)
+  }, [state.window.start, state.window.end, dispatch])
 
   useEffect(() => {
     if (!map || !state.focusTarget) return

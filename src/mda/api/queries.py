@@ -548,13 +548,8 @@ def _layer_tracks(conn, region, start: datetime, end: datetime) -> dict:
 
 
 def _layer_ports(conn, region, start: datetime, end: datetime) -> dict:
-    min_lon, min_lat, max_lon, max_lat = _bbox_params(region)
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT ST_X(geom), ST_Y(geom), name, country FROM facility "
-            "WHERE kind = 'port' AND ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))",
-            (min_lon, min_lat, max_lon, max_lat),
-        )
+        cur.execute("SELECT ST_X(geom), ST_Y(geom), name, country FROM facility WHERE kind = 'port'")
         rows = cur.fetchall()
     features = [
         _point_feature(lon, lat, {"name": name, "country": country})
@@ -564,13 +559,8 @@ def _layer_ports(conn, region, start: datetime, end: datetime) -> dict:
 
 
 def _layer_cables(conn, region, start: datetime, end: datetime) -> dict:
-    min_lon, min_lat, max_lon, max_lat = _bbox_params(region)
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT ST_AsGeoJSON(geom), name FROM zone "
-            "WHERE kind = 'cable' AND ST_Intersects(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))",
-            (min_lon, min_lat, max_lon, max_lat),
-        )
+        cur.execute("SELECT ST_AsGeoJSON(geom), name FROM zone WHERE kind = 'cable'")
         rows = cur.fetchall()
     features = [
         {"type": "Feature", "geometry": json.loads(geom_json), "properties": {"name": name}}
@@ -580,13 +570,10 @@ def _layer_cables(conn, region, start: datetime, end: datetime) -> dict:
 
 
 def _layer_zones(conn, region, start: datetime, end: datetime) -> dict:
-    min_lon, min_lat, max_lon, max_lat = _bbox_params(region)
     with conn.cursor() as cur:
         cur.execute(
             "SELECT ST_AsGeoJSON(geom), name, kind FROM zone "
-            "WHERE (kind IN ('aoi', 'region') OR kind LIKE 'geofence%%') "
-            "AND ST_Intersects(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))",
-            (min_lon, min_lat, max_lon, max_lat),
+            "WHERE kind IN ('aoi', 'region') OR kind LIKE 'geofence%%'"
         )
         rows = cur.fetchall()
     features = [

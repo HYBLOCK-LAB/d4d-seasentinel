@@ -13,6 +13,7 @@ export const COLORS = {
   warn: '#f5a623',
   crit: '#ff5a4d',
   steel: '#94b2d1',
+  bright: '#e8f0f9',
 }
 
 export const LAYER_DEFS: LayerDef[] = [
@@ -63,6 +64,6 @@ export const LAYER_DEFS: LayerDef[] = [
     group: 'REFERENCE',
     title: 'Ports',
     titleKo: '항만',
-    legend: { kind: 'point', color: COLORS.steel },
+    legend: { kind: 'point', color: COLORS.bright },
   },
 ]
