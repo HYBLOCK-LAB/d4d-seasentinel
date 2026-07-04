@@ -12,9 +12,9 @@ from presail.paths import data_dir
 
 BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 CHUNK_DAYS = 365
-MIN_INTERVAL = 6.0
-BACKOFF_SECONDS = 30.0
-MAX_RETRIES = 8
+MIN_INTERVAL = 8.0
+BACKOFF_SECONDS = 45.0
+MAX_RETRIES = 4
 
 _last_call = 0.0
 
