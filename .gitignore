@@ -12,3 +12,4 @@ dashboard/.secrets/
 node_modules/
 .playwright-mcp/
 *.png
+data-tmp/
