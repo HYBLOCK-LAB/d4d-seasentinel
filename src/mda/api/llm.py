@@ -4,8 +4,8 @@ from datetime import datetime
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from mda.api import queries
@@ -119,7 +119,7 @@ async def models() -> dict:
 
 
 @router.post("/copilot/agent")
-async def copilot_agent(request: AgentRequest) -> dict | JSONResponse:
+async def copilot_agent(request: AgentRequest) -> dict:
     payload = {
         "model": request.model or LLM_MODEL,
         "messages": [{"role": "system", "content": SYSTEM_PROMPT + AGENT_SUFFIX}] + request.messages,
@@ -136,7 +136,7 @@ async def copilot_agent(request: AgentRequest) -> dict | JSONResponse:
             response.raise_for_status()
             data = response.json()
     except Exception as exc:
-        return JSONResponse(status_code=502, content={"error": str(exc)})
+        raise HTTPException(status_code=502, detail=str(exc))
     return {"message": data["choices"][0]["message"]}
 
 
