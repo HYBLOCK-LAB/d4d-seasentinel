@@ -1,8 +1,8 @@
 import maplibregl, { Map as MlMap, NavigationControl, ScaleControl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { useRegion } from '../state/AppState'
-import { BASE_STYLE } from './baseStyle'
+import { useRegion, useSettings } from '../state/AppState'
+import { BASE_STYLE, MAP_THEME } from './baseStyle'
 import styles from './MapView.module.css'
 
 const MapCtx = createContext<MlMap | null>(null)
@@ -15,7 +15,16 @@ export function MapView({ children }: { children?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<MlMap | null>(null)
   const region = useRegion()
+  const { theme } = useSettings()
   const [cursor, setCursor] = useState<{ lon: number; lat: number } | null>(null)
+
+  useEffect(() => {
+    if (!map) return
+    const t = MAP_THEME[theme]
+    map.setPaintProperty('bg', 'background-color', t.bg)
+    for (const id of ['land50-fill', 'land10-fill']) map.setPaintProperty(id, 'fill-color', t.land)
+    for (const id of ['land50-line', 'land10-line']) map.setPaintProperty(id, 'line-color', t.coast)
+  }, [map, theme])
 
   useEffect(() => {
     if (!containerRef.current) return

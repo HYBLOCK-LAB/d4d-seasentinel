@@ -73,3 +73,30 @@
   --z-drawer: 30;
   --z-overlay: 40;
 }
+
+/* Maritime chart light theme — cool paper surfaces, deep navy ink, darker
+   accent/warn/crit so all semantic colors keep contrast on a bright ground. */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #f4f7fb;
+  --bg-1: #eaf0f7;
+  --bg-2: #dde6f0;
+  --bg-3: #ccd9e8;
+
+  --line: rgba(23, 42, 68, 0.12);
+  --line-strong: rgba(23, 42, 68, 0.24);
+
+  --text-1: #0d1b2e;
+  --text-2: #46586f;
+  --text-3: #74869e;
+
+  --accent: #0d8f7a;
+  --accent-dim: rgba(13, 143, 122, 0.12);
+  --accent-line: rgba(13, 143, 122, 0.4);
+
+  --warn: #b06d00;
+  --warn-dim: rgba(176, 109, 0, 0.14);
+  --crit: #c8362b;
+  --crit-dim: rgba(200, 54, 43, 0.14);
+}

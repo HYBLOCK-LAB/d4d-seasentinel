@@ -1,5 +1,10 @@
 import type { StyleSpecification } from 'maplibre-gl'
 
+export const MAP_THEME: Record<'dark' | 'light', { bg: string; land: string; coast: string }> = {
+  dark: { bg: '#0a1220', land: '#1b2a44', coast: 'rgba(148,178,209,0.35)' },
+  light: { bg: '#dfe9f2', land: '#f2ede2', coast: 'rgba(23,42,68,0.4)' },
+}
+
 export const BASE_STYLE: StyleSpecification = {
   version: 8,
   glyphs: 'https://invalid.local/{fontstack}/{range}',

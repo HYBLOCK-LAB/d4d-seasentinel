@@ -3,7 +3,13 @@ import { api } from '../api/client'
 import type { Meta, Region, TimeWindow } from '../api/types'
 import { DEFAULT_REGION_ID, FALLBACK_REGIONS } from '../constants/regions'
 
-export type RightPanel = 'ontology' | 'copilot' | 'osint' | null
+export type RightPanel = 'ontology' | 'copilot' | 'osint' | 'settings' | null
+
+export interface Settings {
+  theme: 'dark' | 'light'
+  model: string
+  autoRefresh: boolean
+}
 
 export interface AppState {
   regions: Region[]
@@ -17,6 +23,7 @@ export interface AppState {
   focusTarget: { lon: number; lat: number } | null
   meta: Meta | null
   playing: boolean
+  settings: Settings
 }
 
 export type Action =
@@ -29,6 +36,7 @@ export type Action =
   | { type: 'ontologyFocus'; focus: { table: string; srcId?: string } | null }
   | { type: 'focus'; target: { lon: number; lat: number } | null }
   | { type: 'playing'; on: boolean }
+  | { type: 'settings'; patch: Partial<Settings> }
 
 export const DEFAULT_LAYERS: Record<string, boolean> = {
   ais_points: true,
@@ -38,6 +46,25 @@ export const DEFAULT_LAYERS: Record<string, boolean> = {
   zones: true,
   cables: true,
   ports: true,
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'dark',
+  model: '',
+  autoRefresh: true,
+}
+
+const SETTINGS_STORAGE_KEY = 'seasentinel.settings'
+
+function loadSettings(): Settings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (!raw) return DEFAULT_SETTINGS
+    const parsed = JSON.parse(raw) as Partial<Settings>
+    return { ...DEFAULT_SETTINGS, ...parsed }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
 }
 
 function hoursAgo(end: string, h: number): string {
@@ -58,6 +85,7 @@ export const initialState: AppState = {
   focusTarget: null,
   meta: null,
   playing: false,
+  settings: loadSettings(),
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -92,6 +120,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, focusTarget: action.target }
     case 'playing':
       return { ...state, playing: action.on }
+    case 'settings':
+      return { ...state, settings: { ...state.settings, ...action.patch } }
   }
 }
 
@@ -106,6 +136,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       () => {},
     )
   }, [])
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings))
+    document.documentElement.dataset.theme = state.settings.theme
+  }, [state.settings])
   return (
     <StateCtx.Provider value={state}>
       <DispatchCtx.Provider value={dispatch}>{children}</DispatchCtx.Provider>
@@ -124,4 +158,8 @@ export function useAppDispatch(): Dispatch<Action> {
 export function useRegion(): Region {
   const s = useAppState()
   return s.regions.find((r) => r.id === s.regionId) ?? (FALLBACK_REGIONS[0] as Region)
+}
+
+export function useSettings(): Settings {
+  return useAppState().settings
 }
