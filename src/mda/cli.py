@@ -4,19 +4,9 @@ import argparse
 import json
 from datetime import date
 
-import pandas as pd
-
-from mda.collectors.gdelt import fetch_volraw_and_tone
-from mda.collectors.gfw import fetch_4wings_daily, token
 from mda.config import load_aois, load_events, load_index_config
 from mda.paths import data_dir
-from mda.pipelines import persist
-from mda.pipelines.artifact import build_artifact
-from mda.pipelines.backtest import run_backtest
-from mda.pipelines.charts import render_event_charts
-from mda.pipelines.index import compute_index
-from mda.pipelines.signals import build_signals
-from mda.store import migrate_legacy, pg
+from mda.store import pg
 
 
 def _date(text: str) -> date:
@@ -47,6 +37,8 @@ def _cmd_init_db(args) -> None:
 
 
 def _cmd_migrate(args) -> None:
+    from mda.store import migrate_legacy
+
     for table, n in migrate_legacy.migrate().items():
         print(f"  {table}: {n}")
     print("verify:")
@@ -54,16 +46,22 @@ def _cmd_migrate(args) -> None:
 
 
 def _cmd_migrate_verify(args) -> None:
+    from mda.store import migrate_legacy
+
     _print_verify(migrate_legacy.verify())
 
 
 def _cmd_fetch_gdelt(args) -> None:
+    from mda.collectors.gdelt import fetch_volraw_and_tone
+
     rows = fetch_volraw_and_tone(args.query, args.start, args.end)
     nonzero = [r for r in rows if r["article_count"] > 0]
     print(f"query={args.query!r} rows={len(rows)} nonzero_days={len(nonzero)}")
 
 
 def _cmd_fetch_gfw(args) -> None:
+    from mda.collectors.gfw import fetch_4wings_daily, token
+
     if not token():
         print("GFW_TOKEN not set; skipping GFW.")
         return
@@ -74,6 +72,10 @@ def _cmd_fetch_gfw(args) -> None:
 
 
 def _cmd_build_index(args) -> None:
+    from mda.pipelines import persist
+    from mda.pipelines.index import compute_index
+    from mda.pipelines.signals import build_signals
+
     signals = build_signals(args.start, args.end, gdelt_only=args.gdelt_only, event_windows=not args.full_range)
     index_df, contrib_df = compute_index(signals, load_index_config())
     index_df.to_parquet(data_dir("processed", "index.parquet"), index=False)
@@ -139,6 +141,11 @@ def _cmd_ais_stream(args) -> None:
 
 
 def _cmd_backtest(args) -> None:
+    import pandas as pd
+
+    from mda.pipelines.backtest import run_backtest
+    from mda.pipelines.charts import render_event_charts
+
     index_df = pd.read_parquet(data_dir("processed", "index.parquet"))
     contrib_df = pd.read_parquet(data_dir("processed", "contributions.parquet"))
     cfg = load_index_config()
@@ -155,6 +162,13 @@ def _cmd_backtest(args) -> None:
 
 
 def _cmd_run(args) -> None:
+    from mda.pipelines import persist
+    from mda.pipelines.artifact import build_artifact
+    from mda.pipelines.backtest import run_backtest
+    from mda.pipelines.charts import render_event_charts
+    from mda.pipelines.index import compute_index
+    from mda.pipelines.signals import build_signals
+
     cfg = load_index_config()
     events = load_events()
     aois = load_aois()
