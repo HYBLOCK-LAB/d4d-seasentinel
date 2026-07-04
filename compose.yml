@@ -22,14 +22,13 @@ services:
       context: .
       dockerfile: Dockerfile.dashboard
     restart: unless-stopped
-    network_mode: bridge
+    network_mode: host
+    command: ["uvicorn", "mda.api.app:app", "--host", "0.0.0.0", "--port", "8123"]
     environment:
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL}
-      MDA_PG_DSN: postgresql://mda:${MDA_PG_PASSWORD}@172.17.0.1:5434/mda
-    ports:
-      - "8123:8080"
+      MDA_PG_DSN: postgresql://mda:${MDA_PG_PASSWORD}@localhost:5434/mda
 
 volumes:
   mda_pgdata:
