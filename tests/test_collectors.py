@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timezone
 
 from mda.collectors.reference import _IMO_RE, _blank, _multiline_ewkt
-from mda.collectors.stealthmole import _rows, _to_ts
+from mda.collectors.stealthmole import _rows, _strip_html, _to_ts
 from mda.collectors.weather_openmeteo import _center
 
 
@@ -20,12 +20,24 @@ def test_stealthmole_to_ts_from_unix():
 
 
 def test_stealthmole_rows_shape_and_ids_match():
-    item = {"id": "abc123", "value": "선원 모집 서해", "createDate": 1751622930}
+    item = {"id": "abc123", "value": "2488886305_324", "createDate": 1751622930}
     osint, doc = _rows("선원 모집", "ko", "crew_recruitment", "telegram.message", item)
     assert osint["item_id"] == doc["document_id"] == "stealthmole:tt:telegram.message:abc123"
     assert osint["source_module"] == "stealthmole_tt"
     assert osint["kind"] == "crew_recruitment"
     assert doc["doc_type"] == "telegram.message"
+
+
+def test_stealthmole_prefers_highlight_text_over_id():
+    item = {"id": "x", "value": "2488886305_324", "highlight": '[채널] 윙락<br>  ... <b><font color="#3EC478">선원</font></b> 모집 &amp; 보급 ...', "createDate": 1751622930}
+    osint, _ = _rows("선원 모집", "ko", "crew_recruitment", "telegram.message", item)
+    assert "선원 모집 & 보급" in osint["text"]
+    assert "<b>" not in osint["text"] and "font" not in osint["text"]
+    assert "2488886305_324" not in osint["text"]
+
+
+def test_strip_html_unescapes_and_removes_tags():
+    assert _strip_html("a<br>b<b>c</b>&amp;d") == "a bc&d"
 
 
 def test_ofac_blank_sentinel():

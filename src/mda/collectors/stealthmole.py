@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -9,6 +11,14 @@ import httpx
 import jwt
 import yaml
 from dotenv import load_dotenv
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _strip_html(raw: str) -> str:
+    text = raw.replace("<br>", " ").replace("<br/>", " ").replace("<br />", " ")
+    text = _TAG_RE.sub("", text)
+    return html.unescape(text).strip()
 
 from mda.paths import config_path, repo_root
 from mda.store import pg
@@ -129,7 +139,8 @@ def _to_ts(create_date) -> datetime:
 
 def _rows(term: str, lang: str, category: str, target: str, item: dict) -> tuple[dict, dict]:
     node_id = str(item.get("id") or uuid.uuid4().hex)
-    text = item.get("value") or item.get("highlight") or ""
+    highlight = item.get("highlight")
+    text = _strip_html(highlight) if highlight else (item.get("value") or "")
     ts = _to_ts(item.get("createDate"))
     item_id = f"stealthmole:tt:{target}:{node_id}"
     osint = {
