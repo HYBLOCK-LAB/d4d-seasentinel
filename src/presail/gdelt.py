@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 from datetime import date, datetime, timedelta
 
@@ -34,18 +35,25 @@ def _request(query: str, mode: str, start: str, end: str) -> dict:
         "startdatetime": start,
         "enddatetime": end,
     }
+    empty = {"timeline": []}
     for attempt in range(MAX_RETRIES):
         _throttle()
         resp = httpx.get(BASE, params=params, timeout=60.0)
         body = resp.text.strip()
-        if resp.status_code == 429 or body.startswith("Please limit"):
+        throttled = resp.status_code == 429 or "limit requests" in body[:80].lower()
+        if throttled:
             time.sleep(BACKOFF_SECONDS)
             continue
         resp.raise_for_status()
-        if not body:
-            return {"timeline": []}
-        return json.loads(body)
-    raise RuntimeError(f"GDELT rate-limited after {MAX_RETRIES} retries: {query!r}")
+        if not body or not body.startswith("{"):
+            time.sleep(BACKOFF_SECONDS)
+            continue
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            time.sleep(BACKOFF_SECONDS)
+    print(f"GDELT: no parseable response after {MAX_RETRIES} tries, empty for {query!r} {mode}", file=sys.stderr)
+    return empty
 
 
 def _parse_date(raw: str) -> date:
