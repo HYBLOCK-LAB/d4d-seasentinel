@@ -78,6 +78,19 @@ Metrics: **lead time** (days the index crossed WATCH before the event), peak
 percentile vs the location's own baseline, and false-positive episodes in
 quiet periods.
 
+## Findings (real-data backtest)
+
+| event | pattern | result |
+|---|---|---|
+| Sabina/Escoda 2024 | prolonged multi-week massing | **WATCH crossed ~45 days before** the Aug 31 escalation, sustained ALERT through it |
+| Scarborough 2024 | sudden water-cannon incident | same-day ALERT detection (no early warning — a discrete event) |
+| Whitsun Reef 2021 | AIS-dark militia | AIS presence stayed flat (vessels went dark); index fired only when news broke — the hard case that motivates SAR/OSINT fusion |
+
+The honest narrative is stronger than "everything triggered": the system buys
+weeks of warning for the sustained massing operations that can actually be
+pre-empted (Sabina), detects sudden incidents on the day (Scarborough), and
+transparently exposes the dark-vessel gap (Whitsun) where AIS alone is blind.
+
 ## Honest scope
 
 - Two of the planned GFW signals (AIS-gap and port-visit events) require an
@@ -89,6 +102,11 @@ quiet periods.
   does not claim a tuned production detector.
 - Reef bounding boxes were verified against published coordinates and
   confirmed empirically (vessel presence spikes on the event dates).
+- GDELT enforces a strict ~1-request/5s rate limit. The client throttles and
+  backs off; a cold full build takes a few minutes. Chinese-language queries
+  that miss the cache during a rate-limit window fall back to empty and simply
+  drop out of the weighted average (English + AIS + SAR still carry the index).
+  Re-running once the limit clears fills them in.
 
 ## Tests
 
