@@ -114,6 +114,12 @@ def _cmd_foundry_sync(args) -> None:
     print(sync.sync_bounded())
 
 
+def _cmd_lake_sync(args) -> None:
+    from mda.store import s3
+
+    print(s3.sync_lake())
+
+
 def _cmd_export_dashboard(args) -> None:
     from datetime import datetime, timedelta, timezone
 
@@ -232,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     ed.set_defaults(func=_cmd_export_dashboard)
 
     sub.add_parser("foundry-sync").set_defaults(func=_cmd_foundry_sync)
+    sub.add_parser("lake-sync").set_defaults(func=_cmd_lake_sync)
 
     return parser
 
