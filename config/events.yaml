@@ -1,0 +1,18 @@
+- event_id: whitsun_2021
+  name: Whitsun Reef militia massing (~220 vessels moored)
+  event_date: 2021-03-07
+  aoi_id: whitsun_reef
+  search_days_before: 45
+  search_days_after: 7
+- event_id: scarborough_2024
+  name: Scarborough Shoal water-cannon escalation
+  event_date: 2024-04-30
+  aoi_id: scarborough_shoal
+  search_days_before: 45
+  search_days_after: 7
+- event_id: sabina_2024
+  name: Sabina/Escoda Shoal escalation (203 vessels, CCG ramming)
+  event_date: 2024-08-31
+  aoi_id: sabina_shoal
+  search_days_before: 45
+  search_days_after: 7

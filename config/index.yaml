@@ -1,0 +1,20 @@
+baseline_days: 180
+embargo_days: 14
+mad_floor: 0.5
+z_clip_min: 0.0
+z_clip_max: 6.0
+transform_k: 1.5
+ffill_max_days: 3
+thresholds:
+  watch: 65
+  alert: 80
+weights:
+  gdelt_place_en: 0.15
+  gdelt_place_zh: 0.10
+  gdelt_militia_en: 0.15
+  gdelt_militia_zh: 0.10
+  gdelt_tone: 0.05
+  gfw_presence_hours: 0.15
+  gfw_sar_presence: 0.15
+  gfw_ais_gap_count: 0.10
+  gfw_port_visit_count: 0.05

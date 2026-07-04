@@ -1,0 +1,25 @@
+- aoi_id: hainan_staging
+  name: Hainan staging ports (Sanya, Tanmen)
+  role: staging
+  bbox: [109.3, 18.0, 111.0, 19.6]
+  coords_verified: false
+- aoi_id: spratly_chinese_holdings
+  name: Spratly forward bases (Subi, Mischief)
+  role: forward_base
+  bbox: [114.0, 9.4, 115.7, 11.2]
+  coords_verified: false
+- aoi_id: whitsun_reef
+  name: Whitsun Reef / Julian Felipe Reef
+  role: reef
+  bbox: [115.40, 8.92, 115.70, 9.22]
+  coords_verified: false
+- aoi_id: scarborough_shoal
+  name: Scarborough Shoal / Bajo de Masinloc
+  role: reef
+  bbox: [117.60, 14.98, 117.90, 15.28]
+  coords_verified: false
+- aoi_id: sabina_shoal
+  name: Sabina Shoal / Escoda Shoal
+  role: reef
+  bbox: [117.05, 7.85, 117.35, 8.15]
+  coords_verified: false
