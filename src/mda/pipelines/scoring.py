@@ -148,8 +148,11 @@ def _alert_rows(
     by_type: dict[str, int] = {}
     by_subject_type: dict[str, int] = {}
 
+    min_alert = float(thresholds.get("min_alert", 0.0))
     for (subject_type, subject_id), detections in grouped.items():
         score, level = score_detections(detections, thresholds)
+        if score < min_alert:
+            continue
         alert_type = alert_type_for_subject(subject_type)
         dedupe_key = make_dedupe_key(alert_type, subject_id)
         title_ko, title_en = _titles(subject_type, subject_id, detections, score)
@@ -328,6 +331,7 @@ def run_scoring(
         alert_ids = _upsert_alerts(conn, alert_rows)
         evidence_count = _replace_evidence(conn, evidence_rows, alert_ids)
         history_count = _insert_history(conn, history_rows)
+        _prune_stale_alerts(conn, list(alert_ids.keys()))
 
         explain_result = explain_top_alerts(conn, top) if explain else {"explained": 0, "skipped_no_evidence": 0}
 
@@ -341,6 +345,21 @@ def run_scoring(
         "detectors": detector_counts,
         "explained": explain_result,
     }
+
+
+def _prune_stale_alerts(conn: psycopg.Connection, live_dedupe_keys: list[str]) -> None:
+    # Score history is kept so trends survive alert suppression.
+    with conn.cursor() as cur:
+        cur.execute(
+            "select alert_id from alert where method_version = %s "
+            "and not (dedupe_key = any(%s))",
+            (METHOD, live_dedupe_keys or [""]),
+        )
+        stale = [r[0] for r in cur.fetchall()]
+        if not stale:
+            return
+        cur.execute("delete from alert_evidence where alert_id = any(%s)", (stale,))
+        cur.execute("delete from alert where alert_id = any(%s)", (stale,))
 
 
 def _evidence_for_explain(conn: psycopg.Connection, alert_id: str) -> list[dict]:

@@ -12,6 +12,7 @@ terms:
   north_origin: "북측 해역 진입 후 남하"
   low_density: "동급 대비 낮은 AIS 밀도"
   gfw_gap_event: "GFW AIS 공백 이벤트"
+  friendly_flag: "아군·한국 국적 선박(감점)"
   fishing_negative: "실조업 활동 확인(감점)"
   zone_vessel_presence_z: "구역 내 선박 수 이상치"
   zone_cluster_hits_z: "구역 내 군집 이상치"

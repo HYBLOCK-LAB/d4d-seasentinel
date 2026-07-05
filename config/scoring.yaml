@@ -1,6 +1,7 @@
 thresholds:
   high: 75.0
   critical: 90.0
+  min_alert: 12.0
 detectors:
   ais_gap:
     enabled: true
@@ -70,6 +71,11 @@ detectors:
     enabled: true
     weight: 1.0
     points: 38.0
+  friendly_flag:
+    enabled: true
+    weight: 1.0
+    points: -25.0
+    mids: [440, 441]
   fishing_negative:
     enabled: true
     weight: 1.0

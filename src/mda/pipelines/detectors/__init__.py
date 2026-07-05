@@ -9,6 +9,7 @@ from mda.pipelines.detectors import (  # noqa: F401
     clustering,
     course_change,
     fishing_negative,
+    friendly_flag,
     gfw_gap_event,
     loitering,
     low_density,
