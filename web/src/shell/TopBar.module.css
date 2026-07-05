@@ -94,6 +94,22 @@
   border-right: 1px solid var(--line);
 }
 
+.activeKpi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.activeKpi b {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .secondaryKpis {
   display: grid;
   grid-template-columns: repeat(3, auto);

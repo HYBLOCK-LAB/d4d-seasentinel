@@ -1,5 +1,5 @@
 import { Database, MessageSquareText, Rss, Settings } from 'lucide-react'
-import { IconButton, Kpi } from '../design/components'
+import { IconButton } from '../design/components'
 import { useAppDispatch, useAppState } from '../state/AppState'
 import styles from './TopBar.module.css'
 
@@ -48,7 +48,9 @@ export function TopBar() {
       <div className={styles.spacer} />
       {(counts || state.liveStats) && (
         <div className={styles.kpis}>
-          <Kpi value={fmtNum(activeVessels)} label="인지 선박(10분)" tone="accent" />
+          <span className={styles.activeKpi}>
+            인지 선박(10분) <b className="mono">{fmtNum(activeVessels)}</b>
+          </span>
           <div className={styles.secondaryKpis}>
             <span>
               누적 선박 <b className="mono">{fmtNum(counts?.vessel)}</b>
