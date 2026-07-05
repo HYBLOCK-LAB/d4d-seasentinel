@@ -133,6 +133,7 @@ export interface OntologyRows {
 export type LayerId =
   | 'ais_points'
   | 'tracks'
+  | 'sar'
   | 'ports'
   | 'cables'
   | 'zones'
