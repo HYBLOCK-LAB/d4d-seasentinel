@@ -7,12 +7,12 @@ import { OsintPanel } from '../panels/OsintPanel';
 import { SettingsPanel } from '../panels/SettingsPanel';
 import styles from './RightDrawer.module.css';
 
-const TABS: Array<{ id: Exclude<RightPanel, null>; label: string }> = [
-  { id: 'ontology', label: 'ONTOLOGY · 원본' },
-  { id: 'osint', label: 'OSINT · 첩보' },
-  { id: 'copilot', label: 'COPILOT · 질의' },
-  { id: 'settings', label: '설정' },
-];
+const TITLES: Record<Exclude<RightPanel, null>, string> = {
+  ontology: 'ONTOLOGY · 원본',
+  osint: 'OSINT · 첩보',
+  copilot: 'COPILOT · 질의',
+  settings: '설정',
+};
 
 export function RightDrawer() {
   const state = useAppState();
@@ -21,16 +21,7 @@ export function RightDrawer() {
   return (
     <aside className={styles.drawer}>
       <div className={styles.header}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`${styles.tab} ${state.rightPanel === tab.id ? styles.tabActive : ''}`}
-            onClick={() => dispatch({ type: 'rightPanel', panel: tab.id })}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <span className={styles.title}>{state.rightPanel ? TITLES[state.rightPanel] : ''}</span>
         <div className={styles.spacer} />
         <IconButton title="닫기" onClick={() => dispatch({ type: 'rightPanel', panel: null })}>
           <X size={14} />
