@@ -21,6 +21,13 @@ def _window(conn, start, end, dataset):
     return start, end
 
 
+def _region(conn, region):
+    if region:
+        return queries.resolve_region(region)
+    regions = queries._regions_by_id()
+    return regions[queries.data_default_region(conn, regions)]
+
+
 @app.get("/api/health")
 def health() -> dict:
     db_ok = False
@@ -53,7 +60,7 @@ def threats(
     dataset: str | None = None,
 ) -> dict:
     with datasets.dataset_conn(dataset) as conn:
-        resolved_region = queries.resolve_region(region)
+        resolved_region = _region(conn, region)
         start, end = _window(conn, start, end, dataset)
         return {"threats": queries.get_threats(conn, resolved_region, start, end)}
 
@@ -79,7 +86,7 @@ def layer(
     if handler is None:
         raise HTTPException(status_code=404, detail="unknown layer")
     with datasets.dataset_conn(dataset) as conn:
-        resolved_region = queries.resolve_region(region)
+        resolved_region = _region(conn, region)
         start, end = _window(conn, start, end, dataset)
         return handler(conn, resolved_region, start, end)
 
@@ -93,7 +100,7 @@ def timeline(
     dataset: str | None = None,
 ) -> dict:
     with datasets.dataset_conn(dataset) as conn:
-        resolved_region = queries.resolve_region(region)
+        resolved_region = _region(conn, region)
         start, end = _window(conn, start, end, dataset)
         return queries.get_timeline(conn, resolved_region, start, end, bucket)
 
@@ -106,7 +113,7 @@ def osint(
     dataset: str | None = None,
 ) -> dict:
     with datasets.dataset_conn(dataset) as conn:
-        resolved_region = queries.resolve_region(region)
+        resolved_region = _region(conn, region)
         start, end = _window(conn, start, end, dataset)
         return queries.get_osint(conn, resolved_region, start, end)
 
