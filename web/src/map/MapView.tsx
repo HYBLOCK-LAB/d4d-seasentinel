@@ -11,6 +11,13 @@ export function useMap(): MlMap | null {
   return useContext(MapCtx)
 }
 
+// maplibre deletes `map.style` on remove(); any style API afterwards throws.
+// React tears down parents before children on keyed remounts, so child
+// effects/cleanups must verify the map is still alive before touching it.
+export function mapAlive(map: MlMap | null): map is MlMap {
+  return map != null && Boolean((map as unknown as { style?: unknown }).style)
+}
+
 export function MapView({ children }: { children?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<MlMap | null>(null)
@@ -19,7 +26,7 @@ export function MapView({ children }: { children?: ReactNode }) {
   const [cursor, setCursor] = useState<{ lon: number; lat: number } | null>(null)
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     const t = MAP_THEME[theme]
     map.setPaintProperty('bg', 'background-color', t.bg)
     for (const id of ['land50-fill', 'land10-fill']) map.setPaintProperty(id, 'fill-color', t.land)
@@ -45,7 +52,7 @@ export function MapView({ children }: { children?: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     const [minLon, minLat, maxLon, maxLat] = region.bbox
     map.fitBounds(
       [

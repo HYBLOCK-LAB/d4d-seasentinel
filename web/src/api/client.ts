@@ -34,7 +34,8 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 }
 
 async function post<T>(path: string): Promise<T> {
-  const res = await fetch(`/api${path}`, { method: 'POST' })
+  const qs = currentDataset ? `?dataset=${encodeURIComponent(currentDataset)}` : ''
+  const res = await fetch(`/api${path}${qs}`, { method: 'POST' })
   if (!res.ok) throw new Error(`${path} ${res.status}`)
   return res.json() as Promise<T>
 }

@@ -86,10 +86,10 @@ export default function ThreatsPanel() {
       })
       .catch((err) => {
         const msg = String(err instanceof Error ? err.message : err);
-        const unsupported = msg.includes('404') || msg.includes('501');
+        const notFound = msg.includes('404');
         setExplain((current) => ({
           ...current,
-          [threatId]: { loading: false, error: unsupported ? '설명 생성 미지원' : '설명 생성 실패' },
+          [threatId]: { loading: false, error: notFound ? '위협을 찾을 수 없음' : '설명 생성 실패' },
         }));
       });
   }

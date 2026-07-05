@@ -117,9 +117,10 @@ def threat_evidence(threat_id: str, dataset: str | None = None) -> dict:
 
 
 @app.post("/api/threats/{threat_id}/explain")
-def threat_explain(threat_id: str) -> dict:
+def threat_explain(threat_id: str, dataset: str | None = None) -> dict:
+    ds = None if datasets.is_live(dataset) else dataset
     try:
-        with pg.connect() as conn:
+        with pg.connect(dataset=ds) as conn:
             result = queries.explain_threat(conn, threat_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -718,7 +718,7 @@ def get_threat_evidence(conn, threat_id: str):
 
 def explain_threat(conn, threat_id: str) -> dict | None:
     result = get_threat_evidence(conn, threat_id)
-    if result is None or result["threat"].get("kind") == "area":
+    if result is None:
         return None
     evidence = [
         {"term": item["term"], "points": item["points"], "detail": item["detail"]}
@@ -729,9 +729,20 @@ def explain_threat(conn, threat_id: str) -> dict | None:
 
     from mda.llm_client import generate_threat_summary_ko
 
-    summary = generate_threat_summary_ko(result["threat"], evidence)
-    with conn.cursor() as cur:
-        cur.execute("UPDATE alert SET summary_ko = %s WHERE alert_id = %s", (summary, threat_id))
+    summary = ""
+    for _ in range(2):
+        summary = generate_threat_summary_ko(result["threat"], evidence).strip()
+        if summary:
+            break
+    if not summary:
+        raise ValueError("LLM returned empty summary")
+    # Area threats are computed rows without an alert record, so the summary
+    # is returned per-request instead of being persisted.
+    if result["threat"].get("kind") != "area":
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE alert SET summary_ko = %s WHERE alert_id = %s", (summary, threat_id)
+            )
     return {"summary_ko": summary}
 
 

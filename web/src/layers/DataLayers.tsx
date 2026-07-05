@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl'
 import type * as GeoJSON from 'geojson'
 import { useAppState, useAppDispatch, useRegion, useSettings } from '../state/AppState'
 import { api } from '../api/client'
-import { useMap } from '../map/MapView'
+import { mapAlive, useMap } from '../map/MapView'
 import { COLORS, LAYER_DEFS } from './registry'
 import type { LayerDef } from './registry'
 import type { Changes, FeatureCollection, LayerId, Threat, TimeWindow } from '../api/types'
@@ -490,7 +490,7 @@ export default function DataLayers() {
   portFill = theme === 'light' ? PORT_COLOR_LIGHT : COLORS.bright
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     const id = sourceId('ports')
     if (map.getLayer(id)) map.setPaintProperty(id, 'circle-color', portFill)
   }, [map, theme])
@@ -531,7 +531,7 @@ export default function DataLayers() {
       .layer(id, params)
       .then((fc) => {
         const latest = latestRef.current
-        if (!latest.map || !latest.map.getStyle() || !latest.layersEnabled[id]) return
+        if (!mapAlive(latest.map) || !latest.layersEnabled[id]) return
         if (
           latest.regionId !== params.region ||
           latest.window.start !== params.start ||
@@ -554,7 +554,7 @@ export default function DataLayers() {
   }, [])
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     const prev = layerDepsRef.current
     const next = {
       regionId: region.id,
@@ -597,7 +597,7 @@ export default function DataLayers() {
   }, [region.id])
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     applyWindowPaint(map, state.window)
   }, [map, state.window])
 
@@ -657,9 +657,10 @@ export default function DataLayers() {
       map.off('click', onClick)
       map.off('mousemove', onMove)
       popupRef.current?.remove()
+      if (!mapAlive(map)) return
       removeHighlight(map)
       for (const def of LAYER_DEFS) {
-        if (map.getStyle()) removeLayer(map, def.id)
+        removeLayer(map, def.id)
       }
     }
   }, [map, dispatch])
@@ -712,7 +713,7 @@ export default function DataLayers() {
   }, [state.settings.autoRefresh, state.window.end, dispatch, requestLayer])
 
   useEffect(() => {
-    if (!map) return
+    if (!mapAlive(map)) return
     if (!state.highlight) {
       removeHighlight(map)
       return
@@ -747,7 +748,7 @@ export default function DataLayers() {
   }, [map, state.highlight, dispatch])
 
   useEffect(() => {
-    if (!map || !state.focusTarget) return
+    if (!mapAlive(map) || !state.focusTarget) return
     map.flyTo({
       center: [state.focusTarget.lon, state.focusTarget.lat],
       zoom: Math.max(map.getZoom(), 8),
