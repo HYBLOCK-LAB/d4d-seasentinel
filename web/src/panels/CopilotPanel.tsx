@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { SendHorizonal } from 'lucide-react';
+import { ClipboardCheck, Map, Scale, SearchCheck, SendHorizonal } from 'lucide-react';
 import { IconButton } from '../design/components';
 import { useAppDispatch, useAppState } from '../state/AppState';
 import { activeDataset, api } from '../api/client';
@@ -11,11 +11,31 @@ interface Message {
   toolChips?: string[];
 }
 
-const PRESETS = [
-  '지난 24시간 해저케이블 인근 다크선박 있나?',
-  '부산 입항 예정 선박 중 최고위험 표적은?',
-  '제재회피 STS 환적 정황을 요약해줘',
-  '이 해역에서 지금 가장 위험한 표적 3개는?',
+const QUICK_ACTIONS = [
+  {
+    icon: SearchCheck,
+    title: '데이터 조회',
+    prompt: '현재 해역의 OSINT 수집 내용과 활동량 추이를 조회해서 주요 동향을 요약해줘',
+    autoSend: true,
+  },
+  {
+    icon: Scale,
+    title: '위협 비교',
+    prompt: '위협 목록 상위 2건의 근거를 비교해서 어느 쪽을 우선 대응해야 하는지 판단해줘',
+    autoSend: true,
+  },
+  {
+    icon: Map,
+    title: '지도 조작',
+    prompt: '가장 위험한 위협을 선택하고 경보·항적 레이어를 켜줘',
+    autoSend: true,
+  },
+  {
+    icon: ClipboardCheck,
+    title: '확인 보고',
+    prompt: '선택한 위협은 현장 확인 결과 통상 조업 어선이다. 위협 아님으로 기록해줘',
+    autoSend: false,
+  },
 ];
 
 const TOOLS = [
@@ -168,6 +188,7 @@ export function CopilotPanel() {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const convoRef = useRef<OpenAiMessage[]>([]);
 
   const settingsModel = (state as unknown as { settings?: { model?: string } }).settings?.model ?? '';
@@ -367,15 +388,28 @@ export function CopilotPanel() {
     }
   }
 
-  const showPresets = !streaming && messages.length === 0;
+  function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
+    if (action.autoSend) {
+      void handleSend(action.prompt);
+      return;
+    }
+    setInput(action.prompt);
+    textareaRef.current?.focus();
+  }
+
+  const showQuickActions = !streaming && messages.length === 0;
 
   return (
     <div className={styles.panel}>
-      {showPresets ? (
-        <div className={styles.presets}>
-          {PRESETS.map((preset) => (
-            <button key={preset} className={`${styles.presetChip} mono`} onClick={() => void handleSend(preset)}>
-              {preset}
+      {showQuickActions ? (
+        <div className={styles.quickGrid}>
+          {QUICK_ACTIONS.map((action) => (
+            <button key={action.title} className={styles.quickCard} onClick={() => handleQuickAction(action)}>
+              <span className={styles.quickHead}>
+                <action.icon size={13} className={styles.quickIcon} />
+                <span className={`${styles.quickTitle} micro-label`}>{action.title}</span>
+              </span>
+              <span className={styles.quickDesc}>{action.prompt}</span>
             </button>
           ))}
         </div>
@@ -400,10 +434,11 @@ export function CopilotPanel() {
       </div>
       <div className={styles.inputRow}>
         <textarea
+          ref={textareaRef}
           className={`${styles.textarea} mono`}
           rows={2}
           value={input}
-          placeholder="질의 또는 화면 조작 지시 (예: 남중국해로 이동해줘)"
+          placeholder="데이터 조회 · 위협 비교 · 지도 조작 · 확인 보고를 자연어로 지시"
           disabled={streaming}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}

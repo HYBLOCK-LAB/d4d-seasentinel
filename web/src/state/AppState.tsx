@@ -89,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
 }
 
 const SETTINGS_STORAGE_KEY = 'seasentinel.settings'
+const DEFAULT_WINDOW_H = 72
 
 function loadSettings(): Settings {
   try {
@@ -132,14 +133,22 @@ setDataset(initialState.settings.dataset)
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'meta': {
-      const w = action.meta.window
+      // fullRange is the whole data extent (timebar domain); the selected window
+      // defaults to the most recent slice ("current") so current pings render as
+      // teal/red and older data stays as the small gray past-events layer,
+      // instead of the whole multi-year extent being treated as "current".
+      const full = action.meta.window
+      const endMs = new Date(full.end).getTime()
+      const startMs = new Date(full.start).getTime()
+      const curStartMs = Math.max(startMs, endMs - DEFAULT_WINDOW_H * 3600_000)
+      const current = { start: new Date(curStartMs).toISOString(), end: full.end }
       return {
         ...state,
         meta: action.meta,
         regions: action.meta.regions.length ? action.meta.regions : state.regions,
         regionId: action.meta.default_region || state.regionId,
-        window: w,
-        fullRange: w,
+        window: current,
+        fullRange: full,
         windowRefreshScope: 'all',
       }
     }
