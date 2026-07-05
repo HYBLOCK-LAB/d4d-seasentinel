@@ -1,3 +1,9 @@
+# Point tiers (documented basis for magnitudes):
+#   identity   75~85  — near-certain identification; alone exceeds HIGH(75)
+#   asset      50~60  — proximity/contact with protected infrastructure
+#   behavior   12~40  — movement anomalies; 2-3 must overlap to reach MED
+#   context    ±4~12  — situational boosts that never alarm alone
+#   mitigating <0     — evidence of benign identity/activity lowers the score
 thresholds:
   high: 75.0
   critical: 90.0
@@ -6,6 +12,8 @@ detectors:
   ais_gap:
     enabled: true
     weight: 0.6
+    tier: behavior
+    rationale_ko: "주기 보고하던 선박이 비정상적으로 긴 공백 후 재출현한 경우만 탐지. 공백 자체는 결정적이지 않아 behavior 하단 배점 + 가중 0.6."
     min_gap_hours: 6.0
     points_base: 15.0
     points_per_hour: 0.5
@@ -13,6 +21,8 @@ detectors:
   cable_proximity:
     enabled: true
     weight: 1.0
+    tier: asset
+    rationale_ko: "해저케이블 등 보호 자산 반경 내 활동. 자산 접촉은 행동 이상보다 심각하되 단독 HIGH 미만이 되도록 asset 티어(55) 배점."
     max_km: 3.0
     points_base: 55.0
     points_per_km_inside: 10.0
@@ -22,15 +32,21 @@ detectors:
   sanctioned_match:
     enabled: true
     weight: 1.0
+    tier: identity
+    rationale_ko: "OFAC/UN1718 제재 목록과 IMO 정확 일치 — 신원 확정 지표이므로 단독으로 HIGH(75)를 넘는 identity 티어(80)."
     points_match: 80.0
     points_presence: 18.0
   zone_activity:
     enabled: true
     weight: 1.0
+    tier: context
+    rationale_ko: "관심구역(AOI) 체류는 맥락 가점 — 단독으로 경보를 만들지 않는 context 티어(+12)."
     boost_points: 12.0
   loitering:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "SOG 1kn 이하로 2시간 이상 배회 — 조업·대기와 구분 불가하므로 중첩 시에만 MED에 도달하는 behavior 티어."
     sog_kn: 1.0
     min_hours: 2.0
     min_points: 3
@@ -38,6 +54,8 @@ detectors:
   clustering:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "동일 시간대 반경 내 8척 이상 군집. 아군 EEZ 내 군집(연안 조업 일상)은 ×0.35 감쇠 — behavior 티어."
     eps_degrees: 0.03
     dbscan_minpoints: 3
     min_size: 8
@@ -48,6 +66,8 @@ detectors:
   course_change:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "항주 중(>3kn) 90도 이상 급변침 반복 — 추적 회피 의심이나 단독 결정력 낮음. behavior 하단 배점."
     delta_degrees: 90.0
     min_sog_kn: 3.0
     points_base: 8.0
@@ -56,6 +76,8 @@ detectors:
   north_origin:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "북측 경계에서 진입 후 지속 남하 — 접경 침투 패턴. 행동 지표 중 상위 배점(22)."
     edge_margin_deg: 0.3
     west_sea_north_lat: 38.5
     southward_min_deg: 0.5
@@ -63,6 +85,8 @@ detectors:
   low_density:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "동일 해역 피어 대비 위치 보고가 20% 미만 — 간헐 송신(회피) 의심. behavior 티어."
     ratio: 0.2
     min_span_hours: 2.0
     min_peers: 5
@@ -70,19 +94,27 @@ detectors:
   gfw_gap_event:
     enabled: true
     weight: 1.0
+    tier: behavior
+    rationale_ko: "GFW가 판정한 의도적 AIS 소실 이벤트와 일치 — 외부 검증된 다크십 신호라 behavior 최상단(38)."
     points: 38.0
   friendly_flag:
     enabled: true
     weight: 1.0
+    tier: mitigating
+    rationale_ko: "한국 국적(MMSI 440/441) — 맥락·행동 지표 1~2개를 상쇄하되 identity/asset 지표는 덮지 못하는 감점(-25)."
     points: -25.0
     mids: [440, 441]
   fishing_negative:
     enabled: true
     weight: 1.0
+    tier: mitigating
+    rationale_ko: "GFW 조업 이벤트로 실조업 확인 — 정상 활동 증거 감점."
     points: 20.0
   zone_anomaly:
     enabled: true
     weight: 1.0
+    tier: context
+    rationale_ko: "구역 사전 징후 게이지 — 각 축(집결·물류·소실·여론·OSINT)의 30일 베이스라인 대비 편차(z)를 합성. 축별 상한이 배점 근거."
     zone_kinds: [gray_zone, aoi]
     baseline_days: 30
     embargo_days: 1

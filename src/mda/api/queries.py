@@ -100,7 +100,7 @@ def _score_trend(conn, dedupe_key: str | None) -> list:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT ts, score FROM threat_score_history WHERE dedupe_key = %s "
+                "SELECT ts, score, config_hash FROM threat_score_history WHERE dedupe_key = %s "
                 "ORDER BY ts DESC LIMIT 10",
                 (dedupe_key,),
             )
@@ -108,7 +108,10 @@ def _score_trend(conn, dedupe_key: str | None) -> list:
     except (errors.UndefinedTable, errors.UndefinedColumn):
         conn.rollback()
         return []
-    return [{"ts": _iso(ts), "score": score} for ts, score in reversed(rows)]
+    return [
+        {"ts": _iso(ts), "score": score, "config_hash": config_hash}
+        for ts, score, config_hash in reversed(rows)
+    ]
 
 
 def _regions_by_id() -> dict:

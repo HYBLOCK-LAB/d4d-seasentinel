@@ -3,8 +3,9 @@ from datetime import datetime
 from threading import Lock
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from mda.api import assess, datasets, llm, queries, sitrep
 from mda.paths import repo_root
@@ -128,6 +129,86 @@ def threat_explain(threat_id: str) -> dict:
     if result is None:
         raise HTTPException(status_code=404, detail="threat not found")
     return result
+
+
+class DetectorPatch(BaseModel):
+    name: str
+    enabled: bool | None = None
+    weight: float | None = None
+    points: float | None = None
+    reset: bool = False
+
+
+class ScoringPatch(BaseModel):
+    detectors: list[DetectorPatch]
+
+
+@app.get("/api/scoring/config")
+def scoring_config() -> dict:
+    from mda.config import load_scoring_config
+
+    cfg = load_scoring_config()
+    overrides: dict[str, dict] = {}
+    with pg.connect(readonly=True) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("select detector, enabled, weight, points from scoring_override")
+                for detector, enabled, weight, points in cur.fetchall():
+                    overrides[detector] = {
+                        k: v
+                        for k, v in {"enabled": enabled, "weight": weight, "points": points}.items()
+                        if v is not None
+                    }
+        except psycopg.Error:
+            conn.rollback()
+    labels = queries._terms_ko()
+    detectors = []
+    for name, block in cfg.detectors.items():
+        o = overrides.get(name, {})
+        detectors.append(
+            {
+                "name": name,
+                "label_ko": labels.get(name) or name,
+                "tier": block.get("tier"),
+                "rationale_ko": block.get("rationale_ko"),
+                "enabled": o.get("enabled", block.get("enabled", True)),
+                "weight": o.get("weight", block.get("weight", 1.0)),
+                "points": o.get("points", block.get("points")),
+                "default_weight": block.get("weight", 1.0),
+                "default_points": block.get("points"),
+                "overridden": name in overrides,
+            }
+        )
+    return {"thresholds": cfg.thresholds, "detectors": detectors}
+
+
+@app.put("/api/scoring/config")
+def scoring_config_update(patch: ScoringPatch) -> dict:
+    with pg.connect() as conn:
+        with conn.cursor() as cur:
+            for item in patch.detectors:
+                if item.reset:
+                    cur.execute("delete from scoring_override where detector = %s", (item.name,))
+                    continue
+                cur.execute(
+                    "insert into scoring_override (detector, enabled, weight, points, updated_at) "
+                    "values (%s, %s, %s, %s, now()) "
+                    "on conflict (detector) do update set "
+                    "enabled = coalesce(excluded.enabled, scoring_override.enabled), "
+                    "weight = coalesce(excluded.weight, scoring_override.weight), "
+                    "points = coalesce(excluded.points, scoring_override.points), "
+                    "updated_at = now()",
+                    (item.name, item.enabled, item.weight, item.points),
+                )
+    return {"updated": len(patch.detectors)}
+
+
+@app.post("/api/scoring/rerun")
+def scoring_rerun(background: BackgroundTasks) -> dict:
+    from mda.pipelines.scoring import run_scoring
+
+    background.add_task(run_scoring)
+    return {"started": True}
 
 
 @app.get("/api/layers/{layer_id}")

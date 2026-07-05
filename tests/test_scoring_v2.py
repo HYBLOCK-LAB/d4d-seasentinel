@@ -42,8 +42,8 @@ def test_score_detections_allows_negative_terms_before_clipping():
 
 def test_alert_type_and_dedupe_key_are_subject_stable():
     alert_type = alert_type_for_subject("zone")
-    assert alert_type == "zone_threat"
-    assert make_dedupe_key(alert_type, "aoi:scarborough") == "zone_threat:aoi:scarborough"
+    assert alert_type == "precursor"
+    assert make_dedupe_key(alert_type, "aoi:scarborough") == "precursor:aoi:scarborough"
     assert alert_type_for_subject("vessel") == "vessel_threat"
 
 

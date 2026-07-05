@@ -119,3 +119,45 @@
 .toggleOff {
   color: var(--text-3);
 }
+
+.detList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.detRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 11px;
+}
+
+.detName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detTier {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim, #5b6b85);
+  margin-left: 4px;
+}
+
+.detNum {
+  width: 52px;
+  background: transparent;
+  border: 1px solid var(--line, #24334a);
+  border-radius: 2px;
+  color: inherit;
+  font-size: 11px;
+  padding: 1px 4px;
+}
