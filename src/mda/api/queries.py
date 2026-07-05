@@ -1,11 +1,14 @@
 import json
+from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import psycopg
 from psycopg import errors, sql
+import yaml
 
 from mda.config import load_aois, load_regions
+from mda.paths import config_path
 
 COUNT_TABLES = [
     "vessel",
@@ -40,6 +43,7 @@ ONTOLOGY_WHITELIST = [
     "source",
     "method_registry",
     "collector_gap",
+    "threat_score_history",
 ]
 
 ORDER_PRIORITY = ("ts", "generated_at", "published_at", "fetched_at", "date")
@@ -74,6 +78,37 @@ def _iso_utc(value) -> str | None:
         value = datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc)
         return value.isoformat().replace("+00:00", "Z")
     return value.isoformat()
+
+
+@lru_cache(maxsize=1)
+def _terms_ko() -> dict:
+    try:
+        with config_path("terms_ko.yaml").open() as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+    return data.get("terms", {})
+
+
+def _term_ko(term: str) -> str | None:
+    return _terms_ko().get(term)
+
+
+def _score_trend(conn, dedupe_key: str | None) -> list:
+    if not dedupe_key:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT ts, score FROM threat_score_history WHERE dedupe_key = %s "
+                "ORDER BY ts DESC LIMIT 10",
+                (dedupe_key,),
+            )
+            rows = cur.fetchall()
+    except (errors.UndefinedTable, errors.UndefinedColumn):
+        conn.rollback()
+        return []
+    return [{"ts": _iso(ts), "score": score} for ts, score in reversed(rows)]
 
 
 def _regions_by_id() -> dict:
@@ -255,14 +290,25 @@ def _last_position(conn, vessel_id, start: datetime | None, end: datetime | None
 
 
 def _get_vessel_threats(conn, region, start: datetime, end: datetime) -> list:
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
-            "region_id, vessel_id, generated_at FROM alert "
-            "WHERE region_id = %s OR region_id IS NULL",
-            (region.region_id,),
-        )
-        rows = cur.fetchall()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
+                "region_id, vessel_id, generated_at, summary_ko, dedupe_key FROM alert "
+                "WHERE (region_id = %s OR region_id IS NULL) AND vessel_id IS NOT NULL",
+                (region.region_id,),
+            )
+            rows = cur.fetchall()
+    except errors.UndefinedColumn:
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
+                "region_id, vessel_id, generated_at, null::text, null::text FROM alert "
+                "WHERE region_id = %s OR region_id IS NULL",
+                (region.region_id,),
+            )
+            rows = cur.fetchall()
     threats = []
     for (
         alert_id,
@@ -274,6 +320,8 @@ def _get_vessel_threats(conn, region, start: datetime, end: datetime) -> list:
         region_id,
         vessel_id,
         generated_at,
+        summary_ko,
+        dedupe_key,
     ) in rows:
         lon, lat = (None, None)
         if vessel_id is not None:
@@ -292,8 +340,64 @@ def _get_vessel_threats(conn, region, start: datetime, end: datetime) -> list:
                 "generated_at": _iso(generated_at),
                 "lon": lon,
                 "lat": lat,
+                "summary_ko": summary_ko,
+                "trend": _score_trend(conn, dedupe_key),
             }
         )
+    return threats
+
+
+def _get_zone_alert_threats(conn, region, start: datetime, end: datetime) -> list:
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT a.alert_id, a.alert_type, a.level, a.score, a.title_ko, a.title_en, "
+                "coalesce(a.region_id, z.region_id) as region_id, a.zone_id, a.generated_at, "
+                "a.summary_ko, a.dedupe_key, ST_X(ST_Centroid(z.geom)), ST_Y(ST_Centroid(z.geom)) "
+                "FROM alert a LEFT JOIN zone z ON z.zone_id = a.zone_id "
+                "WHERE a.zone_id IS NOT NULL AND a.vessel_id IS NULL "
+                "AND (coalesce(a.region_id, z.region_id) = %s OR coalesce(a.region_id, z.region_id) IS NULL)",
+                (region.region_id,),
+            )
+            rows = cur.fetchall()
+    except errors.UndefinedColumn:
+        conn.rollback()
+        return []
+    threats = []
+    for (
+        alert_id,
+        alert_type,
+        level,
+        score,
+        title_ko,
+        title_en,
+        region_id,
+        zone_id,
+        generated_at,
+        summary_ko,
+        dedupe_key,
+        lon,
+        lat,
+    ) in rows:
+        threat = {
+            "id": alert_id,
+            "kind": "zone",
+            "type": alert_type,
+            "level": level,
+            "score": score,
+            "title_ko": title_ko,
+            "title_en": title_en,
+            "region": region_id,
+            "zone_id": zone_id,
+            "generated_at": _iso(generated_at),
+            "lon": lon,
+            "lat": lat,
+            "summary_ko": summary_ko,
+            "trend": _score_trend(conn, dedupe_key),
+        }
+        if zone_id and zone_id.startswith("aoi:"):
+            threat["aoi_id"] = zone_id[4:]
+        threats.append(threat)
     return threats
 
 
@@ -322,14 +426,18 @@ def _get_area_threats(conn, region, start: datetime, end: datetime) -> list:
                 "title_en": f"{aoi_id} pre-sail index {level}",
                 "aoi_id": aoi_id,
                 "date": _iso(threat_date),
+                "summary_ko": None,
+                "trend": [],
             }
         )
     return threats
 
 
 def get_threats(conn, region, start: datetime, end: datetime) -> list:
-    threats = _get_vessel_threats(conn, region, start, end) + _get_area_threats(
-        conn, region, start, end
+    threats = (
+        _get_vessel_threats(conn, region, start, end)
+        + _get_zone_alert_threats(conn, region, start, end)
+        + _get_area_threats(conn, region, start, end)
     )
     threats.sort(key=lambda t: t["score"] or 0, reverse=True)
     return threats
@@ -397,6 +505,7 @@ def _get_alert_evidence(conn, alert_id) -> list:
         evidence.append(
             {
                 "term": term_name,
+                "term_ko": _term_ko(term_name),
                 "points": points,
                 "detail": detail,
                 "src_table": src_table,
@@ -413,13 +522,23 @@ def _get_alert_evidence(conn, alert_id) -> list:
 
 
 def _get_vessel_threat_evidence(conn, threat_id: str):
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
-            "region_id, vessel_id, generated_at FROM alert WHERE alert_id = %s",
-            (threat_id,),
-        )
-        row = cur.fetchone()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
+                "region_id, vessel_id, zone_id, generated_at, summary_ko, dedupe_key FROM alert WHERE alert_id = %s",
+                (threat_id,),
+            )
+            row = cur.fetchone()
+    except errors.UndefinedColumn:
+        conn.rollback()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT alert_id, alert_type, level, score, title_ko, title_en, "
+                "region_id, vessel_id, null::text, generated_at, null::text, null::text FROM alert WHERE alert_id = %s",
+                (threat_id,),
+            )
+            row = cur.fetchone()
     if row is None:
         return None
     (
@@ -431,25 +550,41 @@ def _get_vessel_threat_evidence(conn, threat_id: str):
         title_en,
         region_id,
         vessel_id,
+        zone_id,
         generated_at,
+        summary_ko,
+        dedupe_key,
     ) = row
     lon, lat = (None, None)
     if vessel_id is not None:
         lon, lat = _last_position(conn, vessel_id, None, None)
+    elif zone_id is not None:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ST_X(ST_Centroid(geom)), ST_Y(ST_Centroid(geom)) FROM zone WHERE zone_id = %s", (zone_id,))
+            zrow = cur.fetchone()
+        if zrow is not None:
+            lon, lat = zrow
     threat = {
         "id": alert_id,
-        "kind": "vessel",
+        "kind": "zone" if vessel_id is None and zone_id is not None else "vessel",
         "type": alert_type,
         "level": level,
         "score": score,
         "title_ko": title_ko,
         "title_en": title_en,
         "region": region_id,
-        "vessel_id": vessel_id,
         "generated_at": _iso(generated_at),
         "lon": lon,
         "lat": lat,
+        "summary_ko": summary_ko,
+        "trend": _score_trend(conn, dedupe_key),
     }
+    if vessel_id is not None:
+        threat["vessel_id"] = vessel_id
+    if zone_id is not None:
+        threat["zone_id"] = zone_id
+        if zone_id.startswith("aoi:"):
+            threat["aoi_id"] = zone_id[4:]
     return {"threat": threat, "evidence": _get_alert_evidence(conn, alert_id)}
 
 
@@ -507,6 +642,7 @@ def _get_area_evidence(conn, aoi_id: str, threat_date: date) -> list:
         evidence.append(
             {
                 "term": signal_name,
+                "term_ko": _term_ko(signal_name),
                 "points": index_points,
                 "detail": f"z={z_clip}",
                 "src_table": "signal_daily",
@@ -547,6 +683,8 @@ def _get_area_threat_evidence(conn, threat_id: str):
         "title_en": f"{aoi_id} pre-sail index {level}",
         "aoi_id": aoi_id,
         "date": _iso(threat_date),
+        "summary_ko": None,
+        "trend": [],
     }
     return {"threat": threat, "evidence": _get_area_evidence(conn, aoi_id, threat_date)}
 
@@ -555,6 +693,25 @@ def get_threat_evidence(conn, threat_id: str):
     if threat_id.startswith("area:"):
         return _get_area_threat_evidence(conn, threat_id)
     return _get_vessel_threat_evidence(conn, threat_id)
+
+
+def explain_threat(conn, threat_id: str) -> dict | None:
+    result = get_threat_evidence(conn, threat_id)
+    if result is None or result["threat"].get("kind") == "area":
+        return None
+    evidence = [
+        {"term": item["term"], "points": item["points"], "detail": item["detail"]}
+        for item in result["evidence"]
+    ]
+    if not evidence:
+        raise ValueError("cannot explain threat without evidence")
+
+    from mda.llm_client import generate_threat_summary_ko
+
+    summary = generate_threat_summary_ko(result["threat"], evidence)
+    with conn.cursor() as cur:
+        cur.execute("UPDATE alert SET summary_ko = %s WHERE alert_id = %s", (summary, threat_id))
+    return {"summary_ko": summary}
 
 
 def _point_feature(lon: float, lat: float, properties: dict) -> dict:

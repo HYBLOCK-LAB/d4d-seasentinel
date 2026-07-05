@@ -3,11 +3,15 @@ thresholds:
   critical: 90.0
 detectors:
   ais_gap:
+    enabled: true
+    weight: 1.0
     min_gap_hours: 6.0
     points_base: 40.0
     points_per_hour: 2.0
     coverage_bonus: 10.0
   cable_proximity:
+    enabled: true
+    weight: 1.0
     max_km: 3.0
     points_base: 55.0
     points_per_km_inside: 10.0
@@ -15,7 +19,93 @@ detectors:
     loiter_min_hours: 2.0
     loiter_points: 25.0
   sanctioned_match:
+    enabled: true
+    weight: 1.0
     points_match: 80.0
     points_presence: 18.0
   zone_activity:
+    enabled: true
+    weight: 1.0
     boost_points: 12.0
+  loitering:
+    enabled: true
+    weight: 1.0
+    sog_kn: 1.0
+    min_hours: 2.0
+    min_points: 3
+    points: 18.0
+  clustering:
+    enabled: true
+    weight: 1.0
+    eps_degrees: 0.03
+    dbscan_minpoints: 3
+    min_size: 8
+    points: 16.0
+  course_change:
+    enabled: true
+    weight: 1.0
+    delta_degrees: 90.0
+    min_sog_kn: 3.0
+    points_base: 8.0
+    points_per_event: 2.0
+    max_events: 6
+  north_origin:
+    enabled: true
+    weight: 1.0
+    edge_margin_deg: 0.3
+    west_sea_north_lat: 38.5
+    southward_min_deg: 0.5
+    points: 22.0
+  low_density:
+    enabled: true
+    weight: 1.0
+    ratio: 0.2
+    min_span_hours: 2.0
+    min_peers: 5
+    points: 18.0
+  gfw_gap_event:
+    enabled: true
+    weight: 1.0
+    points: 38.0
+  fishing_negative:
+    enabled: true
+    weight: 1.0
+    points: 20.0
+  zone_anomaly:
+    enabled: true
+    weight: 1.0
+    zone_kinds: [gray_zone, aoi]
+    baseline_days: 30
+    embargo_days: 1
+    mad_floor: 0.5
+    z_clip_min: 0.0
+    z_clip_max: 6.0
+    min_z: 1.5
+    cluster_eps_degrees: 0.03
+    cluster_dbscan_minpoints: 3
+    cluster_min_size: 8
+    weather_wave_max_m: 1.2
+    weather_wind_min_ms: 2.0
+    weather_wind_max_ms: 10.0
+    weather_points: 4.0
+    historical_prior_points_each: 3.0
+    historical_prior_max_points: 12.0
+    axes:
+      zone_vessel_presence_z:
+        points_per_z: 4.0
+        max_points: 18.0
+      zone_cluster_hits_z:
+        points_per_z: 5.0
+        max_points: 20.0
+      zone_gfw_gap_events_z:
+        points_per_z: 6.0
+        max_points: 24.0
+      zone_gdelt_tone_z:
+        points_per_z: 3.0
+        max_points: 12.0
+      zone_gdelt_volume_z:
+        points_per_z: 3.0
+        max_points: 12.0
+      zone_osint_count_z:
+        points_per_z: 3.0
+        max_points: 12.0

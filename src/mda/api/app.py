@@ -93,6 +93,20 @@ def threat_evidence(threat_id: str) -> dict:
     return result
 
 
+@app.post("/api/threats/{threat_id}/explain")
+def threat_explain(threat_id: str) -> dict:
+    try:
+        with pg.connect() as conn:
+            result = queries.explain_threat(conn, threat_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="threat not found")
+    return result
+
+
 @app.get("/api/layers/{layer_id}")
 def layer(
     layer_id: str,
