@@ -308,16 +308,16 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
       })
       break
     case 'events':
+      // Curated incidents are past/reference context — render small gray like
+      // GFW history, so only current detections (AIS teal, alerts red) stand out.
       map.addLayer({
         id: src,
         type: 'circle',
         source: src,
         paint: {
-          'circle-radius': 5,
-          'circle-color': COLORS.warn,
-          'circle-opacity': 0.9,
-          'circle-stroke-color': '#0a1220',
-          'circle-stroke-width': 1,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.6, 8, 2.6, 12, 3.6],
+          'circle-color': COLORS.dim,
+          'circle-opacity': 0.55,
         },
       })
       break
