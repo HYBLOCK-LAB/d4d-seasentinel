@@ -10,6 +10,21 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 1200px) {
+  .bar {
+    gap: var(--sp-2);
+  }
+  .secondaryKpis {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .window {
+    display: none;
+  }
+}
+
 .brand {
   font-size: var(--fs-md);
   font-weight: 400;
