@@ -73,6 +73,24 @@ def default_region_id(regions: dict) -> str:
     return next(iter(regions))
 
 
+def data_default_region(conn, regions: dict) -> str:
+    # Land on the region that actually holds data in the active dataset so a
+    # scenario scoped to a non-default region (e.g. baltic_shadow) is not empty.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT region_id FROM ais_position WHERE region_id IS NOT NULL "
+                "GROUP BY region_id ORDER BY count(*) DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+    except Exception:
+        conn.rollback()
+        row = None
+    if row and row[0] in regions:
+        return row[0]
+    return default_region_id(regions)
+
+
 def resolve_region(region_id: str | None):
     regions = _regions_by_id()
     if region_id and region_id in regions:
@@ -150,7 +168,7 @@ def get_meta(conn, extend_to_now: bool = True) -> dict:
     regions = _regions_by_id()
     return {
         "regions": [_region_to_dict(region) for region in regions.values()],
-        "default_region": default_region_id(regions),
+        "default_region": data_default_region(conn, regions),
         "window": get_window(conn, extend_to_now),
         "counts": get_counts(conn),
         "sources": get_sources(conn),

@@ -102,6 +102,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         meta: action.meta,
         regions: action.meta.regions.length ? action.meta.regions : state.regions,
+        regionId: action.meta.default_region || state.regionId,
         window: w,
         fullRange: w,
       }
