@@ -218,11 +218,6 @@ function applyWindowPaint(map: maplibregl.Map, window: TimeWindow): void {
     12, ['case', gfwIn, 4.5, 3],
   ])
   set(gfw, 'circle-opacity', ['case', gfwIn, 0.8, 0.35])
-  const evIn = inWindow('date_ms', s, e)
-  const ev = sourceId('events')
-  set(ev, 'circle-color', ['case', evIn, COLORS.warn, COLORS.dim])
-  set(ev, 'circle-radius', ['case', evIn, 5, 3])
-  set(ev, 'circle-opacity', ['case', evIn, 0.9, 0.45])
   const alIn = inWindow('gen_ms', s, e)
   set(`${sourceId('alerts_geo')}-core`, 'circle-color', ['case', alIn, COLORS.crit, COLORS.dim])
   set(`${sourceId('alerts_geo')}-core`, 'circle-radius', ['case', alIn, 5, 3])
@@ -308,16 +303,18 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
       })
       break
     case 'events':
-      // Curated incidents are past/reference context — render small gray like
-      // GFW history, so only current detections (AIS teal, alerts red) stand out.
+      // Curated incidents stay yellow regardless of the time window — they are
+      // distinct from the gray GFW history, not window-dimmed context.
       map.addLayer({
         id: src,
         type: 'circle',
         source: src,
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.6, 8, 2.6, 12, 3.6],
-          'circle-color': COLORS.dim,
-          'circle-opacity': 0.55,
+          'circle-radius': 5,
+          'circle-color': COLORS.warn,
+          'circle-opacity': 0.9,
+          'circle-stroke-color': '#0a1220',
+          'circle-stroke-width': 1,
         },
       })
       break
