@@ -8,9 +8,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from mda.api import queries
+from mda.api import datasets, queries
 from mda.paths import repo_root
-from mda.store import pg
 
 load_dotenv(repo_root() / ".env")
 
@@ -61,6 +60,7 @@ class DigestRequest(BaseModel):
     start: str | None = None
     end: str | None = None
     model: str | None = None
+    dataset: str | None = None
 
 
 @router.post("/copilot")
@@ -143,12 +143,14 @@ async def copilot_agent(request: AgentRequest) -> dict:
 @router.post("/osint/digest")
 async def osint_digest(request: DigestRequest) -> dict:
     region = queries.resolve_region(request.region)
-    with pg.connect(readonly=True) as conn:
+    with datasets.dataset_conn(request.dataset) as conn:
         if request.start and request.end:
             start = datetime.fromisoformat(request.start)
             end = datetime.fromisoformat(request.end)
         else:
-            start, end = queries.compute_window(conn)
+            start, end = queries.compute_window(
+                conn, extend_to_now=datasets.is_live(request.dataset)
+            )
         items = queries.get_osint(conn, region, start, end)["items"][:80]
 
     user_content = json.dumps(

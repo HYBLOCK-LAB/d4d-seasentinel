@@ -105,14 +105,17 @@ def check_db(conn) -> bool:
         return False
 
 
-def compute_window(conn) -> tuple[datetime, datetime]:
+def compute_window(conn, extend_to_now: bool = True) -> tuple[datetime, datetime]:
+    end_expr = "coalesce((SELECT max(ts) FROM ais_position), now())"
+    if extend_to_now:
+        end_expr = f"greatest({end_expr}, now())"
     with conn.cursor() as cur:
         cur.execute(
             "SELECT least("
             "  coalesce((SELECT min(ts) FROM ais_position), now()),"
             "  coalesce((SELECT min(event_date)::timestamptz FROM event), now()),"
             "  coalesce((SELECT min(date)::timestamptz FROM index_daily), now())"
-            "), greatest(coalesce((SELECT max(ts) FROM ais_position), now()), now())"
+            f"), {end_expr}"
         )
         row = cur.fetchone()
     if row is None or row[0] is None:
@@ -121,8 +124,8 @@ def compute_window(conn) -> tuple[datetime, datetime]:
     return row[0], row[1]
 
 
-def get_window(conn) -> dict:
-    start, end = compute_window(conn)
+def get_window(conn, extend_to_now: bool = True) -> dict:
+    start, end = compute_window(conn, extend_to_now)
     return {"start": _iso(start), "end": _iso(end)}
 
 
@@ -143,12 +146,12 @@ def get_sources(conn) -> list:
     return [row[0] for row in rows]
 
 
-def get_meta(conn) -> dict:
+def get_meta(conn, extend_to_now: bool = True) -> dict:
     regions = _regions_by_id()
     return {
         "regions": [_region_to_dict(region) for region in regions.values()],
         "default_region": default_region_id(regions),
-        "window": get_window(conn),
+        "window": get_window(conn, extend_to_now),
         "counts": get_counts(conn),
         "sources": get_sources(conn),
     }
@@ -789,7 +792,8 @@ def get_table_columns(conn, table: str) -> list:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT column_name, udt_name FROM information_schema.columns "
-            "WHERE table_name = %s ORDER BY ordinal_position",
+            "WHERE table_name = %s AND table_schema = current_schema() "
+            "ORDER BY ordinal_position",
             (table,),
         )
         return cur.fetchall()

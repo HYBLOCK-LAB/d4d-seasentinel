@@ -1,4 +1,5 @@
 import type {
+  DatasetList,
   FeatureCollection,
   LayerId,
   Meta,
@@ -9,13 +10,22 @@ import type {
   TimelineBucket,
 } from './types'
 
+let currentDataset = ''
+
+export function setDataset(id: string): void {
+  currentDataset = id === 'live' ? '' : id
+}
+
+export function activeDataset(): string {
+  return currentDataset
+}
+
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const qs = params
-    ? '?' +
-      Object.entries(params)
-        .filter(([, v]) => v !== undefined && v !== '')
-        .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
-        .join('&')
+  const entries = Object.entries({ dataset: currentDataset, ...params }).filter(
+    ([, v]) => v !== undefined && v !== '',
+  )
+  const qs = entries.length
+    ? '?' + entries.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
     : ''
   const res = await fetch(`/api${path}${qs}`)
   if (!res.ok) throw new Error(`${path} ${res.status}`)
@@ -39,6 +49,7 @@ export const api = {
   ontologyRows: (table: string, limit: number, offset: number) =>
     get<OntologyRows>(`/ontology/${table}`, { limit, offset }),
   models: () => get<{ models: string[]; default: string }>('/models'),
+  datasets: () => get<DatasetList>('/datasets'),
 }
 
 export async function copilotStream(

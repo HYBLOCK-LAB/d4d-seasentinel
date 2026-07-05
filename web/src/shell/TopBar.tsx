@@ -30,6 +30,11 @@ export function TopBar() {
         ))}
       </select>
       <span className={[styles.window, 'mono'].join(' ')}>{fmtWindow(state.window.start, state.window.end)}</span>
+      {state.settings.dataset && (
+        <span className={styles.simBadge}>
+          SIMULATION · {state.settings.datasetLabel || state.settings.dataset}
+        </span>
+      )}
       <div className={styles.spacer} />
       {counts && (
         <div className={styles.kpis}>

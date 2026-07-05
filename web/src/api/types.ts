@@ -19,6 +19,20 @@ export interface Meta {
   sources: string[]
 }
 
+export interface DatasetInfo {
+  id: string
+  name_ko: string
+  name_en?: string | null
+  kind: string
+  description?: string | null
+  created_at?: string | null
+}
+
+export interface DatasetList {
+  datasets: DatasetInfo[]
+  default: string
+}
+
 export type ThreatKind = 'vessel' | 'area'
 export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'ALERT' | 'WATCH'
 

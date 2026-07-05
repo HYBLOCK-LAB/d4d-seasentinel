@@ -38,10 +38,15 @@ function Shell() {
   )
 }
 
+function KeyedShell() {
+  const { settings } = useAppState()
+  return <Shell key={settings.dataset} />
+}
+
 export default function App() {
   return (
     <AppStateProvider>
-      <Shell />
+      <KeyedShell />
     </AppStateProvider>
   )
 }

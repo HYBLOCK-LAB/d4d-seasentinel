@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { activeDataset } from '../api/client';
 import { useAppState } from '../state/AppState';
 import styles from './OsintPanel.module.css';
 
@@ -76,6 +77,7 @@ export function OsintPanel(): JSX.Element {
           start: timeWindow.start,
           end: timeWindow.end,
         });
+        if (activeDataset()) params.set('dataset', activeDataset());
         const res = await fetch(`/api/osint?${params.toString()}`);
         if (!res.ok) throw new Error(`OSINT 조회 실패 (${res.status})`);
         const data = (await res.json()) as OsintResponse;
@@ -110,6 +112,7 @@ export function OsintPanel(): JSX.Element {
             region: regionId,
             start: timeWindow.start,
             end: timeWindow.end,
+            dataset: activeDataset() || undefined,
           }),
         });
         const data = (await res.json()) as DigestResponse;

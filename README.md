@@ -81,6 +81,27 @@ The SEASENTINEL frontend is unchanged except its time axis now derives from the
 exported window; TRIAGE, dark-vessel detection, geofence intrusion, SAR↔AIS
 matching, entity graph, and the LLM copilot all run over real data.
 
+## Scenario datasets (simulation swap)
+
+Real (`public`) data is the default. Backtest/threat-simulation datasets live in
+isolated `sim_<id>` Postgres schemas holding the same ontology tables; the API
+serves any of them via `?dataset=<id>` (search_path swap), so the whole dashboard
+swaps at once. `public` live data is never modified.
+
+```
+uv run mda scenario generate west_sea_cable --preset west_sea_cable   # assumed scenario
+uv run mda scenario generate baltic_shadow  --preset baltic_shadow
+uv run mda scenario generate nll_intrusion  --preset nll_intrusion
+uv run mda scenario capture cap_2026q2 --region west_sea --start 2026-04-01T00:00:00 --end 2026-06-30T23:59:59
+uv run mda scenario list
+uv run mda scenario drop <id>
+```
+
+Presets reconstruct real incidents (Shunxin-39 cable cut, Eagle S / Yi Peng 3
+Baltic sabotage, NLL intrusion + gray-zone militia). In the dashboard, pick a
+dataset in the settings panel; a `SIMULATION` badge marks non-live views. The API
+exposes `GET /api/datasets` and threads `dataset` through every data endpoint.
+
 ## Foundry sync (MCP-gated)
 
 ```

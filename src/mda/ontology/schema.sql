@@ -320,3 +320,12 @@ create table if not exists artifact_snapshot (
     fetched_at timestamptz not null default now(),
     raw_ref text
 );
+
+create table if not exists scenario (
+    scenario_id text primary key,
+    name_ko text not null,
+    name_en text,
+    description text,
+    kind text not null,
+    created_at timestamptz not null default now()
+);

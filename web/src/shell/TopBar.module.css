@@ -54,6 +54,19 @@
   color: var(--text-2);
 }
 
+.simBadge {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--warn);
+  background: var(--warn-dim);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
 .spacer {
   flex: 1;
 }
