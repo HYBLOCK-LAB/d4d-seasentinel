@@ -184,6 +184,51 @@ function renderedLayerToLayerId(renderedId: string): LayerId {
   return renderedId.replace(/^mda-/, '') as LayerId
 }
 
+function inWindow(prop: string, startMs: number, endMs: number): unknown[] {
+  const v = ['coalesce', ['get', prop], 0]
+  return ['all', ['>=', v, startMs], ['<=', v, endMs]]
+}
+
+// In-window features keep their alert colors; anything outside the selected
+// window (before or after) collapses to small dim-gray context dots.
+function applyWindowPaint(map: maplibregl.Map, window: TimeWindow): void {
+  const s = new Date(window.start).getTime()
+  const e = new Date(window.end).getTime()
+  const set = (layer: string, prop: string, value: unknown): void => {
+    if (map.getLayer(layer)) map.setPaintProperty(layer, prop, value as never)
+  }
+  const aisIn = inWindow('ts_ms', s, e)
+  const ais = sourceId('ais_points')
+  set(ais, 'circle-color', ['case', aisIn, COLORS.accent, COLORS.dim])
+  set(ais, 'circle-radius', [
+    'interpolate', ['linear'], ['zoom'],
+    4, ['case', aisIn, 2.5, 1.4],
+    8, ['case', aisIn, 4, 2],
+    12, ['case', aisIn, 6, 3],
+  ])
+  set(ais, 'circle-opacity', ['case', aisIn, 0.9, 0.4])
+  set(ais, 'circle-stroke-width', ['case', aisIn, 1, 0])
+  const gfwIn = inWindow('date_ms', s, e)
+  const gfw = sourceId('gfw_events')
+  set(gfw, 'circle-color', ['case', gfwIn, COLORS.warn, COLORS.dim])
+  set(gfw, 'circle-radius', [
+    'interpolate', ['linear'], ['zoom'],
+    4, ['case', gfwIn, 2, 1.2],
+    8, ['case', gfwIn, 3, 2],
+    12, ['case', gfwIn, 4.5, 3],
+  ])
+  set(gfw, 'circle-opacity', ['case', gfwIn, 0.8, 0.35])
+  const evIn = inWindow('date_ms', s, e)
+  const ev = sourceId('events')
+  set(ev, 'circle-color', ['case', evIn, COLORS.warn, COLORS.dim])
+  set(ev, 'circle-radius', ['case', evIn, 5, 3])
+  set(ev, 'circle-opacity', ['case', evIn, 0.9, 0.45])
+  const alIn = inWindow('gen_ms', s, e)
+  set(`${sourceId('alerts_geo')}-core`, 'circle-color', ['case', alIn, COLORS.crit, COLORS.dim])
+  set(`${sourceId('alerts_geo')}-core`, 'circle-radius', ['case', alIn, 5, 3])
+  set(`${sourceId('alerts_geo')}-halo`, 'circle-opacity', ['case', alIn, 0.2, 0])
+}
+
 function featureCentroid(feature: GeoJSON.Feature): [number, number] | null {
   const pts: Array<[number, number]> = []
   const walk = (v: unknown): void => {
@@ -499,6 +544,7 @@ export default function DataLayers() {
           return
         }
         ensureData(latest.map, def, fc)
+        applyWindowPaint(latest.map, latest.window)
       })
       .catch((err) => console.warn(`layer ${id}`, err))
       .finally(() => {
@@ -552,6 +598,11 @@ export default function DataLayers() {
   useEffect(() => {
     changesRef.current = null
   }, [region.id])
+
+  useEffect(() => {
+    if (!map) return
+    applyWindowPaint(map, state.window)
+  }, [map, state.window])
 
   useEffect(() => {
     if (!map) return

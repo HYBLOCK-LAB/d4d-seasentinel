@@ -748,15 +748,17 @@ def _feature_collection(features: list) -> dict:
 
 
 def _layer_ais_points(conn, region, start: datetime, end: datetime) -> dict:
+    # Latest fix per vessel up to window end; the frontend dims fixes older
+    # than window start so out-of-window vessels stay visible as context.
     with conn.cursor() as cur:
         cur.execute(
             "SELECT DISTINCT ON (p.mmsi) ST_X(p.geom), ST_Y(p.geom), p.mmsi, "
             "p.vessel_id, v.name, p.ts, p.sog, p.cog "
             "FROM ais_position p "
             "LEFT JOIN vessel v ON v.vessel_id = p.vessel_id "
-            "WHERE p.region_id = %s AND p.ts BETWEEN %s AND %s "
+            "WHERE p.region_id = %s AND p.ts <= %s "
             "ORDER BY p.mmsi, p.ts DESC LIMIT 5000",
-            (region.region_id, start, end),
+            (region.region_id, end),
         )
         rows = cur.fetchall()
     features = [
@@ -768,6 +770,7 @@ def _layer_ais_points(conn, region, start: datetime, end: datetime) -> dict:
                 "vessel_id": vessel_id,
                 "name": name,
                 "ts": _iso(ts),
+                "ts_ms": int(ts.timestamp() * 1000) if ts else None,
                 "sog": sog,
                 "cog": cog,
             },
@@ -784,7 +787,7 @@ def _layer_tracks(conn, region, start: datetime, end: datetime, track_minutes: i
             WITH latest AS (
               SELECT DISTINCT ON (mmsi) mmsi, vessel_id, ts AS latest_ts
               FROM ais_position
-              WHERE region_id = %s AND ts BETWEEN %s AND %s
+              WHERE region_id = %s AND ts <= %s
               ORDER BY mmsi, ts DESC
             ),
             ranked AS (
@@ -798,14 +801,14 @@ def _layer_tracks(conn, region, start: datetime, end: datetime, track_minutes: i
               FROM latest l
               JOIN ais_position p ON p.mmsi = l.mmsi
               WHERE p.region_id = %s
-                AND p.ts BETWEEN %s AND l.latest_ts
+                AND p.ts <= l.latest_ts
             )
             SELECT mmsi, vessel_id, lon, lat, ts
             FROM ranked
             WHERE rn <= 10
             ORDER BY mmsi, ts
             """,
-            (region.region_id, start, end, region.region_id, start),
+            (region.region_id, end, region.region_id),
         )
         rows = cur.fetchall()
     tracks: dict = {}
@@ -878,9 +881,8 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
             "SELECT ST_X(geom), ST_Y(geom), name, event_type, event_date, description "
             "FROM event WHERE geom IS NOT NULL AND event_type NOT LIKE 'gfw%%' "
             "AND (region_id = %s OR "
-            "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))) "
-            "AND event_date BETWEEN %s AND %s",
-            (region.region_id, min_lon, min_lat, max_lon, max_lat, start.date(), end.date()),
+            "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326)))",
+            (region.region_id, min_lon, min_lat, max_lon, max_lat),
         )
         rows = cur.fetchall()
     features = [
@@ -891,6 +893,9 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
                 "name": name,
                 "event_type": event_type,
                 "event_date": _iso(event_date),
+                "date_ms": int(datetime.combine(event_date, datetime.min.time(), tzinfo=timezone.utc).timestamp() * 1000)
+                if event_date
+                else None,
                 "description": description,
             },
         )
@@ -900,6 +905,8 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
 
 
 def _layer_gfw_events(conn, region, start: datetime, end: datetime) -> dict:
+    # Windowless: in-window events get highlighted client-side, the rest stay
+    # dim gray context. Sampled to bound payload size.
     min_lon, min_lat, max_lon, max_lat = _bbox_params(region)
     with conn.cursor() as cur:
         cur.execute(
@@ -907,9 +914,8 @@ def _layer_gfw_events(conn, region, start: datetime, end: datetime) -> dict:
             "FROM event WHERE geom IS NOT NULL AND event_type LIKE 'gfw%%' "
             "AND (region_id = %s OR "
             "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))) "
-            "AND event_date BETWEEN %s AND %s "
             "ORDER BY event_date DESC LIMIT 10000",
-            (region.region_id, min_lon, min_lat, max_lon, max_lat, start.date(), end.date()),
+            (region.region_id, min_lon, min_lat, max_lon, max_lat),
         )
         rows = cur.fetchall()
     features = [
@@ -920,6 +926,9 @@ def _layer_gfw_events(conn, region, start: datetime, end: datetime) -> dict:
                 "name": name,
                 "event_type": event_type,
                 "event_date": _iso(event_date),
+                "date_ms": int(datetime.combine(event_date, datetime.min.time(), tzinfo=timezone.utc).timestamp() * 1000)
+                if event_date
+                else None,
             },
         )
         for lon, lat, name, event_type, event_date in rows
@@ -930,13 +939,13 @@ def _layer_gfw_events(conn, region, start: datetime, end: datetime) -> dict:
 def _layer_alerts_geo(conn, region, start: datetime, end: datetime) -> dict:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT alert_id, alert_type, level, score, title_ko, vessel_id "
+            "SELECT alert_id, alert_type, level, score, title_ko, vessel_id, generated_at "
             "FROM alert WHERE region_id = %s OR region_id IS NULL",
             (region.region_id,),
         )
         rows = cur.fetchall()
     features = []
-    for alert_id, alert_type, level, score, title_ko, vessel_id in rows:
+    for alert_id, alert_type, level, score, title_ko, vessel_id, generated_at in rows:
         if vessel_id is None:
             continue
         lon, lat = _last_position(conn, vessel_id, start, end)
@@ -947,6 +956,7 @@ def _layer_alerts_geo(conn, region, start: datetime, end: datetime) -> dict:
                 lon,
                 lat,
                 {
+                    "gen_ms": int(generated_at.timestamp() * 1000) if generated_at else None,
                     "alert_id": alert_id,
                     "alert_type": alert_type,
                     "level": level,
@@ -1110,6 +1120,27 @@ def get_table_columns(conn, table: str) -> list:
         return cur.fetchall()
 
 
+VIRTUAL_GEOM_SQL = {
+    # Tables without their own geometry still map to a map entity.
+    "vessel": (
+        "(select ST_AsGeoJSON(p.geom) from ais_position p "
+        "where p.vessel_id = t.vessel_id order by p.ts desc limit 1) as geom"
+    ),
+    "alert": (
+        "coalesce("
+        "(select ST_AsGeoJSON(p.geom) from ais_position p "
+        "where p.vessel_id = t.vessel_id order by p.ts desc limit 1), "
+        "(select ST_AsGeoJSON(ST_Centroid(z.geom)) from zone z "
+        "where z.zone_id = t.zone_id)) as geom"
+    ),
+    "alert_evidence": (
+        "(select ST_AsGeoJSON(p.geom) from alert a "
+        "join ais_position p on p.vessel_id = a.vessel_id "
+        "where a.alert_id = t.alert_id order by p.ts desc limit 1) as geom"
+    ),
+}
+
+
 def get_table_page(conn, table: str, limit: int, offset: int) -> dict:
     limit = min(limit, 200)
     columns = get_table_columns(conn, table)
@@ -1124,8 +1155,12 @@ def get_table_page(conn, table: str, limit: int, offset: int) -> dict:
             )
         else:
             select_parts.append(sql.Identifier(name))
-    order_column = next((c for c in ORDER_PRIORITY if c in column_names), column_names[0])
-    query = sql.SQL("SELECT {} FROM {} ORDER BY {} DESC LIMIT %s OFFSET %s").format(
+    virtual_geom = VIRTUAL_GEOM_SQL.get(table) if "geom" not in column_names else None
+    if virtual_geom:
+        select_parts.append(sql.SQL(virtual_geom))
+        column_names = column_names + ["geom"]
+    order_column = next((c for c in ORDER_PRIORITY if c in [c0[0] for c0 in columns]), columns[0][0])
+    query = sql.SQL("SELECT {} FROM {} AS t ORDER BY {} DESC LIMIT %s OFFSET %s").format(
         sql.SQL(", ").join(select_parts),
         sql.Identifier(table),
         sql.Identifier(order_column),
