@@ -22,6 +22,8 @@
   --accent-line: rgba(53, 224, 194, 0.4);
 
   /* Threat-level colors — used ONLY for level semantics, never decoration. */
+  --med: #d8c24a;
+  --med-dim: rgba(216, 194, 74, 0.14);
   --warn: #f5a623;
   --warn-dim: rgba(245, 166, 35, 0.14);
   --crit: #ff5a4d;
@@ -95,6 +97,8 @@
   --accent-dim: rgba(13, 143, 122, 0.12);
   --accent-line: rgba(13, 143, 122, 0.4);
 
+  --med: #8f7c00;
+  --med-dim: rgba(143, 124, 0, 0.12);
   --warn: #b06d00;
   --warn-dim: rgba(176, 109, 0, 0.14);
   --crit: #c8362b;

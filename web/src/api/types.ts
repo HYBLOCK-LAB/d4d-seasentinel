@@ -43,7 +43,7 @@ export interface DatasetList {
 }
 
 export type ThreatKind = 'vessel' | 'area' | 'zone'
-export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'ALERT' | 'WATCH'
+export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'LOW' | 'ALERT' | 'WATCH'
 
 export interface ThreatTrendPoint {
   ts: string

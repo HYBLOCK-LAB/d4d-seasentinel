@@ -6,7 +6,8 @@ const LEVEL_CLASS: Record<string, string | undefined> = {
   ALERT: styles.crit,
   HIGH: styles.warn,
   WATCH: styles.warn,
-  MED: styles.accent,
+  MED: styles.med,
+  LOW: styles.neutral,
 }
 
 export function Badge({ level, children }: { level?: string; children: ReactNode }) {

@@ -171,6 +171,16 @@ def _cmd_analyze(args) -> None:
     )
 
 
+def _cmd_score_backtest(args) -> None:
+    import json
+
+    from mda.pipelines import vessel_backtest
+
+    detectors = args.detectors.split(",") if args.detectors else None
+    result = vessel_backtest.run_vessel_backtest(args.dataset, detectors=detectors)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def _cmd_foundry_sync(args) -> None:
     from mda.sync import sync
 
@@ -322,6 +332,11 @@ def build_parser() -> argparse.ArgumentParser:
     an.add_argument("--explain", action="store_true")
     an.add_argument("--top", type=int, default=20)
     an.set_defaults(func=_cmd_analyze)
+
+    sb = sub.add_parser("score-backtest")
+    sb.add_argument("--dataset", required=True)
+    sb.add_argument("--detectors", default=None, help="comma-separated subset to evaluate")
+    sb.set_defaults(func=_cmd_score_backtest)
 
     ed = sub.add_parser("export-dashboard")
     ed.add_argument("--region", default="west_sea")

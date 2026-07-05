@@ -27,7 +27,9 @@ def level_for(score: float, thresholds: dict) -> str:
         return "CRITICAL"
     if score >= thresholds["high"]:
         return "HIGH"
-    return "MED"
+    if score >= float(thresholds.get("low", 0.0)):
+        return "MED"
+    return "LOW"
 
 
 def assemble(alert_base: dict, evidence: list[dict], thresholds: dict) -> dict:
@@ -70,6 +72,19 @@ def alert_type_for_subject(subject_type: str) -> str:
 def score_detections(detections: list[Detection], thresholds: dict) -> tuple[float, str]:
     score = clip_score(sum(d.points for d in detections))
     return score, level_for(score, thresholds)
+
+
+# A flag is spoofable; confirmed identity/asset/boundary evidence must not be
+# offset by it, so the mitigating term is dropped when any of these fire.
+HARD_EVIDENCE_TERMS = {"geofence_crossing", "CABLE_PROXIMITY", "SANCTIONED_MATCH"}
+MITIGATING_TERM = "friendly_flag"
+
+
+def drop_friendly_on_hard_evidence(detections: list[Detection]) -> list[Detection]:
+    terms = {d.term for d in detections}
+    if MITIGATING_TERM in terms and terms & HARD_EVIDENCE_TERMS:
+        return [d for d in detections if d.term != MITIGATING_TERM]
+    return detections
 
 
 def _window() -> tuple[datetime, datetime]:
@@ -357,6 +372,8 @@ def run_scoring(
         grouped: dict[tuple[str, str], list[Detection]] = defaultdict(list)
         for detection in detections:
             grouped[(detection.subject_type, detection.subject_id)].append(detection)
+        for key in grouped:
+            grouped[key] = drop_friendly_on_hard_evidence(grouped[key])
 
         alert_rows, evidence_rows, history_rows, by_type, by_subject_type = _alert_rows(
             conn, grouped, cfg.thresholds, generated_at

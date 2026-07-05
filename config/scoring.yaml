@@ -7,6 +7,7 @@
 thresholds:
   high: 75.0
   critical: 90.0
+  low: 40.0
   min_alert: 12.0
 detectors:
   ais_gap:
@@ -82,6 +83,16 @@ detectors:
     west_sea_north_lat: 38.5
     southward_min_deg: 0.5
     points: 22.0
+  geofence_crossing:
+    enabled: true
+    weight: 1.0
+    tier: behavior
+    rationale_ko: "NLL 등 경계선(geofence_line)을 이북 깊은 기원에서 남하 종단으로 통과. 선 인근 조업 클러터(기원 ~0도, 남하 ±0.1도)와 침범(기원 0.6도+, 남하 0.7도+)을 기원 깊이·남하 거리 임계로 분리 — behavior 최상단."
+    origin_min_deg: 0.2
+    southward_min_deg: 0.3
+    points_base: 40.0
+    points_per_deg: 10.0
+    max_points: 60.0
   low_density:
     enabled: true
     weight: 1.0

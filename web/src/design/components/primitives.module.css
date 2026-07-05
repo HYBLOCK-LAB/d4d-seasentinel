@@ -24,6 +24,12 @@
   background: var(--accent-dim);
 }
 
+.badge.med {
+  color: var(--med);
+  border-color: var(--med);
+  background: var(--med-dim);
+}
+
 .badge.warn {
   color: var(--warn);
   border-color: var(--warn);

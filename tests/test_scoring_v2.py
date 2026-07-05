@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from mda.config import ScoringConfig, load_scoring_config
 from mda.pipelines.detectors.core import Detection
+from mda.pipelines.detectors.geofence_crossing import crossing_points
 from mda.pipelines.detectors.low_density import span_bucket
 from mda.pipelines.detectors.north_origin import is_north_origin
 from mda.pipelines.detectors.zone_anomaly import _points_for_axis
@@ -9,7 +10,9 @@ from mda.pipelines.scoring import (
     alert_type_for_subject,
     detector_params,
     detector_weight,
+    drop_friendly_on_hard_evidence,
     enabled_detector_names,
+    level_for,
     make_dedupe_key,
     score_detections,
 )
@@ -89,3 +92,38 @@ def test_zone_axis_points_are_clipped_by_axis_config():
     params = {"axes": {"zone_gfw_gap_events_z": {"points_per_z": 6.0, "max_points": 20.0}}}
     assert _points_for_axis(params, "zone_gfw_gap_events_z", 2.0) == 12.0
     assert _points_for_axis(params, "zone_gfw_gap_events_z", 10.0) == 20.0
+
+
+def test_level_for_adds_low_tier_below_low_threshold():
+    thresholds = {"high": 75.0, "critical": 90.0, "low": 40.0}
+    assert level_for(20.0, thresholds) == "LOW"
+    assert level_for(40.0, thresholds) == "MED"
+    assert level_for(75.0, thresholds) == "HIGH"
+    # Configs without a "low" key keep the historical MED floor.
+    assert level_for(0.0, {"high": 75.0, "critical": 90.0}) == "MED"
+
+
+def test_geofence_crossing_separates_intrusion_from_clutter():
+    params = {
+        "origin_min_deg": 0.2,
+        "southward_min_deg": 0.3,
+        "points_base": 40.0,
+        "points_per_deg": 10.0,
+        "max_points": 60.0,
+    }
+    # sim_v_intr1 profile: deep northern origin, sustained southing.
+    assert crossing_points(0.68, 0.74, params) == 47.4
+    # Fleet clutter: origin on the line, shallow oscillation.
+    assert crossing_points(0.02, 0.10, params) is None
+    assert crossing_points(0.68, 0.10, params) is None
+    assert crossing_points(0.5, 5.0, params) == 60.0
+
+
+def test_friendly_flag_dropped_when_hard_evidence_present():
+    friendly = _d("friendly_flag", -25.0)
+    crossing = _d("geofence_crossing", 47.0)
+    kept = drop_friendly_on_hard_evidence([friendly, crossing])
+    assert [d.term for d in kept] == ["geofence_crossing"]
+    # Without hard evidence the mitigating term still applies.
+    soft = _d("loitering", 18.0)
+    assert drop_friendly_on_hard_evidence([friendly, soft]) == [friendly, soft]
