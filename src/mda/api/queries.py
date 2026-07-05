@@ -855,7 +855,8 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT ST_X(geom), ST_Y(geom), name, event_type, event_date, description "
-            "FROM event WHERE geom IS NOT NULL AND (region_id = %s OR "
+            "FROM event WHERE geom IS NOT NULL AND event_type NOT LIKE 'gfw%%' "
+            "AND (region_id = %s OR "
             "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))) "
             "AND event_date BETWEEN %s AND %s",
             (region.region_id, min_lon, min_lat, max_lon, max_lat, start.date(), end.date()),
@@ -873,6 +874,34 @@ def _layer_events(conn, region, start: datetime, end: datetime) -> dict:
             },
         )
         for lon, lat, name, event_type, event_date, description in rows
+    ]
+    return _feature_collection(features)
+
+
+def _layer_gfw_events(conn, region, start: datetime, end: datetime) -> dict:
+    min_lon, min_lat, max_lon, max_lat = _bbox_params(region)
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT ST_X(geom), ST_Y(geom), name, event_type, event_date "
+            "FROM event WHERE geom IS NOT NULL AND event_type LIKE 'gfw%%' "
+            "AND (region_id = %s OR "
+            "ST_Within(geom, ST_MakeEnvelope(%s, %s, %s, %s, 4326))) "
+            "AND event_date BETWEEN %s AND %s "
+            "ORDER BY event_date DESC LIMIT 10000",
+            (region.region_id, min_lon, min_lat, max_lon, max_lat, start.date(), end.date()),
+        )
+        rows = cur.fetchall()
+    features = [
+        _point_feature(
+            lon,
+            lat,
+            {
+                "name": name,
+                "event_type": event_type,
+                "event_date": _iso(event_date),
+            },
+        )
+        for lon, lat, name, event_type, event_date in rows
     ]
     return _feature_collection(features)
 
@@ -915,6 +944,7 @@ LAYERS = {
     "cables": _layer_cables,
     "zones": _layer_zones,
     "events": _layer_events,
+    "gfw_events": _layer_gfw_events,
     "alerts_geo": _layer_alerts_geo,
 }
 

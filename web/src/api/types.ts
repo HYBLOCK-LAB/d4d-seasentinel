@@ -104,6 +104,7 @@ export type LayerId =
   | 'cables'
   | 'zones'
   | 'events'
+  | 'gfw_events'
   | 'alerts_geo'
 
 export interface FeatureCollection {

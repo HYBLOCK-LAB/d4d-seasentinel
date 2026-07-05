@@ -14,9 +14,17 @@ export const COLORS = {
   crit: '#ff5a4d',
   steel: '#94b2d1',
   bright: '#e8f0f9',
+  dim: '#6b7687',
 }
 
 export const LAYER_DEFS: LayerDef[] = [
+  {
+    id: 'gfw_events',
+    group: 'ACTIVITY',
+    title: 'Historical vessel events (GFW)',
+    titleKo: '과거 선박 이벤트(GFW)',
+    legend: { kind: 'point', color: COLORS.dim },
+  },
   {
     id: 'ais_points',
     group: 'ACTIVITY',

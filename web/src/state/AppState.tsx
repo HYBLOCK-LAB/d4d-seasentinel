@@ -56,6 +56,7 @@ export type Action =
   | { type: 'settings'; patch: Partial<Settings> }
 
 export const DEFAULT_LAYERS: Record<string, boolean> = {
+  gfw_events: true,
   ais_points: true,
   tracks: true,
   alerts_geo: true,

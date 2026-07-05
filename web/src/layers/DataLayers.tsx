@@ -104,6 +104,17 @@ function popupSpec(layerId: LayerId, p: Record<string, unknown>): PopupSpec {
         table: 'event',
         note: typeof p.description === 'string' ? p.description.slice(0, 160) : undefined,
       }
+    case 'gfw_events':
+      return {
+        title: '과거 선박 이벤트 (GFW)',
+        color: COLORS.dim,
+        rows: [
+          ['유형', p.event_type],
+          ['선박', p.name],
+          ['일자', p.event_date],
+        ],
+        table: 'event',
+      }
     case 'zones':
       return {
         title: '구역',
@@ -237,6 +248,18 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
           'circle-opacity': 0.9,
           'circle-stroke-color': '#0a1220',
           'circle-stroke-width': 1,
+        },
+      })
+      break
+    case 'gfw_events':
+      map.addLayer({
+        id: src,
+        type: 'circle',
+        source: src,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.2, 8, 2, 12, 3],
+          'circle-color': COLORS.dim,
+          'circle-opacity': 0.45,
         },
       })
       break
@@ -592,7 +615,10 @@ export default function DataLayers() {
             requestLayer('alerts_geo')
             dispatch({ type: 'triggerThreatsRefresh' })
           }
-          if (tsAdvanced(prev.events_max_ts, next.events_max_ts)) requestLayer('events')
+          if (tsAdvanced(prev.events_max_ts, next.events_max_ts)) {
+            requestLayer('events')
+            requestLayer('gfw_events')
+          }
         })
         .catch((err) => console.warn('changes', err))
     }
