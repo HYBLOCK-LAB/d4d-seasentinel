@@ -37,6 +37,43 @@ def _cmd_init_db(args) -> None:
     print("schema applied")
 
 
+def _print_counts(counts: dict) -> None:
+    for table, n in counts.items():
+        print(f"  {table}: {n}")
+
+
+def _cmd_scenario(args) -> None:
+    from mda.sim import capture, presets, registry
+
+    with pg.connect() as conn:
+        if args.scenario_command == "list":
+            for s in registry.list_scenarios(conn):
+                print(f"  {s['id']} [{s['kind']}] {s['name_ko']} — {s['description'] or ''}")
+        elif args.scenario_command == "create":
+            registry.create_scenario(
+                conn, args.id, args.name_ko, args.name_en, args.description, args.kind
+            )
+            print(f"scenario {args.id} created")
+        elif args.scenario_command == "drop":
+            registry.drop_scenario(conn, args.id)
+            print(f"scenario {args.id} dropped")
+        elif args.scenario_command == "generate":
+            preset = args.preset or args.id
+            if preset not in presets.PRESETS:
+                raise SystemExit(f"unknown preset: {preset} (available: {', '.join(presets.PRESETS)})")
+            _, name_ko, name_en, description = presets.PRESETS[preset]
+            registry.create_scenario(conn, args.id, name_ko, name_en, description, kind="assumed")
+            _print_counts(presets.generate(conn, args.id, preset, seed=args.seed))
+        elif args.scenario_command == "capture":
+            from datetime import datetime
+
+            start = datetime.fromisoformat(args.start)
+            end = datetime.fromisoformat(args.end)
+            name_ko = args.name_ko or f"실데이터 캡쳐 {args.start} ~ {args.end}"
+            registry.create_scenario(conn, args.id, name_ko, args.name_en, args.description, kind="captured")
+            _print_counts(capture.capture(conn, args.id, start, end, args.region))
+
+
 def _cmd_migrate(args) -> None:
     from mda.store import migrate_legacy
 
@@ -293,6 +330,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("foundry-sync").set_defaults(func=_cmd_foundry_sync)
     sub.add_parser("lake-sync").set_defaults(func=_cmd_lake_sync)
+
+    sc = sub.add_parser("scenario")
+    scsub = sc.add_subparsers(dest="scenario_command", required=True)
+    scsub.add_parser("list").set_defaults(func=_cmd_scenario)
+    scc = scsub.add_parser("create")
+    scc.add_argument("id")
+    scc.add_argument("--name-ko", required=True)
+    scc.add_argument("--name-en")
+    scc.add_argument("--description")
+    scc.add_argument("--kind", choices=["assumed", "captured"], default="assumed")
+    scc.set_defaults(func=_cmd_scenario)
+    scd = scsub.add_parser("drop")
+    scd.add_argument("id")
+    scd.set_defaults(func=_cmd_scenario)
+    scg = scsub.add_parser("generate")
+    scg.add_argument("id")
+    scg.add_argument("--preset")
+    scg.add_argument("--seed", type=int)
+    scg.set_defaults(func=_cmd_scenario)
+    scp = scsub.add_parser("capture")
+    scp.add_argument("id")
+    scp.add_argument("--start", required=True)
+    scp.add_argument("--end", required=True)
+    scp.add_argument("--region")
+    scp.add_argument("--name-ko")
+    scp.add_argument("--name-en")
+    scp.add_argument("--description")
+    scp.set_defaults(func=_cmd_scenario)
 
     return parser
 

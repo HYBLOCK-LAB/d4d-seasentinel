@@ -28,6 +28,20 @@ export interface Changes {
   active_vessels_10m: number
 }
 
+export interface DatasetInfo {
+  id: string
+  name_ko: string
+  name_en?: string | null
+  kind: string
+  description?: string | null
+  created_at?: string | null
+}
+
+export interface DatasetList {
+  datasets: DatasetInfo[]
+  default: string
+}
+
 export type ThreatKind = 'vessel' | 'area' | 'zone'
 export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'ALERT' | 'WATCH'
 
