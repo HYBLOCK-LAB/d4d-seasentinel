@@ -6,12 +6,14 @@ import psycopg
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 
-from mda.api import datasets, llm, queries
+from mda.api import assess, datasets, llm, queries, sitrep
 from mda.paths import repo_root
 from mda.store import pg
 
 app = FastAPI(title="SeaSentinel MDA API")
 app.include_router(llm.router, prefix="/api")
+app.include_router(assess.router, prefix="/api")
+app.include_router(sitrep.router, prefix="/api")
 
 _changes_conn: psycopg.Connection | None = None
 _changes_conn_lock = Lock()

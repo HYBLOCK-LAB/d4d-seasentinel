@@ -332,6 +332,27 @@ create table if not exists artifact_snapshot (
     raw_ref text
 );
 
+create table if not exists analyst_assessment (
+    assessment_id bigserial primary key,
+    alert_id text not null references alert (alert_id) on delete cascade,
+    points double precision not null,
+    reason text not null,
+    raw_text text,
+    author text,
+    created_at timestamptz not null default now()
+);
+create index if not exists analyst_assessment_alert_idx on analyst_assessment (alert_id);
+
+create table if not exists sitrep (
+    sitrep_id bigserial primary key,
+    region_id text not null,
+    generated_at timestamptz not null default now(),
+    model text,
+    threat_sig text not null,
+    body_ko text not null
+);
+create index if not exists sitrep_region_idx on sitrep (region_id, generated_at desc);
+
 create table if not exists scenario (
     scenario_id text primary key,
     name_ko text not null,

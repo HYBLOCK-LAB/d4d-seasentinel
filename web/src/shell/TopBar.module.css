@@ -10,6 +10,21 @@
   flex-shrink: 0;
 }
 
+@media (max-width: 1200px) {
+  .bar {
+    gap: var(--sp-2);
+  }
+  .secondaryKpis {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .window {
+    display: none;
+  }
+}
+
 .brand {
   font-size: var(--fs-md);
   font-weight: 400;
@@ -77,6 +92,22 @@
   gap: var(--sp-4);
   padding-right: var(--sp-3);
   border-right: 1px solid var(--line);
+}
+
+.activeKpi {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.activeKpi b {
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .secondaryKpis {
