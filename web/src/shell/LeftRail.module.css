@@ -1,4 +1,5 @@
 .rail {
+  position: relative;
   width: var(--rail-w);
   height: 100%;
   display: flex;
@@ -8,16 +9,20 @@
   overflow: hidden;
 }
 
-@media (max-width: 1200px) {
-  .rail {
-    width: 264px;
-  }
+.resizer {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
 }
 
-@media (max-width: 820px) {
-  .rail {
-    width: 216px;
-  }
+.resizer:hover,
+.resizer:active {
+  background: var(--accent-line);
 }
 
 .threatsWrap {
@@ -28,14 +33,20 @@
   overflow: hidden;
 }
 
+/* LAYERS keeps its full content height (up to half the rail) instead of being
+   squeezed by the long THREATS list; THREATS takes the remaining space and
+   scrolls. When collapsed, only the header shows. */
 .layersWrap {
-  flex: 0 1 auto;
-  max-height: 45%;
-  min-height: 120px;
+  flex: 0 0 auto;
+  max-height: 50%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border-top: 1px solid var(--line);
+}
+
+.layersCollapsed {
+  max-height: none;
 }
 
 /* Panel renders a <section>; bound its height so its body scrolls instead of

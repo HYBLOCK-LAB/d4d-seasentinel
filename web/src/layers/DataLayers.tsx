@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type * as GeoJSON from 'geojson'
-import { useAppState, useAppDispatch, useRegion } from '../state/AppState'
+import { useAppState, useAppDispatch, useRegion, useSettings } from '../state/AppState'
 import { api } from '../api/client'
 import { useMap } from '../map/MapView'
 import { COLORS, LAYER_DEFS } from './registry'
@@ -9,6 +9,12 @@ import type { LayerDef } from './registry'
 import type { Changes, FeatureCollection, LayerId, Threat, TimeWindow } from '../api/types'
 
 const sourceId = (id: LayerId): string => `mda-${id}`
+
+// Ports render near-white by default; on the light basemap they must be dark to
+// stay visible. Kept as a module var so the async layer styler reads the theme
+// current at add-time, and the theme effect repaints an existing layer.
+const PORT_COLOR_LIGHT = '#0b1220'
+let portFill: string = COLORS.bright
 const AIS_LAYER_IDS = new Set<LayerId>(['ais_points', 'tracks'])
 const HIGHLIGHT_SOURCE = 'ontology-highlight'
 const HIGHLIGHT_LAYERS = [
@@ -341,7 +347,7 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
         id: src,
         type: 'circle',
         source: src,
-        paint: { 'circle-radius': 2.5, 'circle-color': COLORS.bright, 'circle-opacity': 0.75 },
+        paint: { 'circle-radius': 2.5, 'circle-color': portFill, 'circle-opacity': 0.75 },
       })
       break
   }
@@ -438,6 +444,14 @@ export default function DataLayers() {
   const state = useAppState()
   const dispatch = useAppDispatch()
   const region = useRegion()
+  const { theme } = useSettings()
+  portFill = theme === 'light' ? PORT_COLOR_LIGHT : COLORS.bright
+
+  useEffect(() => {
+    if (!map) return
+    const id = sourceId('ports')
+    if (map.getLayer(id)) map.setPaintProperty(id, 'circle-color', portFill)
+  }, [map, theme])
   const popupRef = useRef<maplibregl.Popup | null>(null)
   const latestRef = useRef<LatestLayerContext>({
     map,
