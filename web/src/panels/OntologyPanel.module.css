@@ -78,6 +78,11 @@
   z-index: 1;
 }
 
+.table th:first-child {
+  min-width: 48px;
+  width: 48px;
+}
+
 .table td {
   font-size: var(--fs-xs);
   color: var(--text-1);
@@ -88,6 +93,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 240px;
+}
+
+.mapCell {
+  min-width: 48px !important;
+  width: 48px;
+  max-width: 48px !important;
+}
+
+.mapButton {
+  height: 18px;
+  padding: 0 var(--sp-1);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+}
+
+.mapButton:hover {
+  color: var(--text-1);
+  background: var(--bg-2);
 }
 
 .muted {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type * as GeoJSON from 'geojson'
 import { useAppState, useAppDispatch, useRegion } from '../state/AppState'
@@ -6,15 +6,31 @@ import { api } from '../api/client'
 import { useMap } from '../map/MapView'
 import { COLORS, LAYER_DEFS } from './registry'
 import type { LayerDef } from './registry'
-import type { FeatureCollection, LayerId } from '../api/types'
+import type { Changes, FeatureCollection, LayerId, Threat, TimeWindow } from '../api/types'
 
 const sourceId = (id: LayerId): string => `mda-${id}`
+const AIS_LAYER_IDS = new Set<LayerId>(['ais_points', 'tracks'])
+const HIGHLIGHT_SOURCE = 'ontology-highlight'
+const HIGHLIGHT_LAYERS = [
+  `${HIGHLIGHT_SOURCE}-fill`,
+  `${HIGHLIGHT_SOURCE}-line`,
+  `${HIGHLIGHT_SOURCE}-point`,
+]
 
 const layerIdsOf = (id: LayerId): string[] =>
-  id === 'alerts_geo' ? [`${sourceId(id)}-halo`, `${sourceId(id)}-core`] : [sourceId(id)]
+  id === 'alerts_geo'
+    ? [`${sourceId(id)}-halo`, `${sourceId(id)}-core`]
+    : id === 'zones'
+      ? [
+          `${sourceId(id)}-gray-fill`,
+          `${sourceId(id)}-gray-outline`,
+          `${sourceId(id)}-eez`,
+          `${sourceId(id)}-outline`,
+        ]
+      : [sourceId(id)]
 
-const CLICKABLE = LAYER_DEFS.map((d) =>
-  d.id === 'alerts_geo' ? `${sourceId(d.id)}-core` : sourceId(d.id),
+const CLICKABLE = LAYER_DEFS.flatMap((d) =>
+  d.id === 'alerts_geo' ? [`${sourceId(d.id)}-core`] : layerIdsOf(d.id),
 )
 
 function esc(value: unknown): string {
@@ -32,6 +48,7 @@ interface PopupSpec {
   table: string
   srcId?: string
   note?: string
+  zoneThreat?: { enabled: boolean; zoneId?: string }
 }
 
 function popupSpec(layerId: LayerId, p: Record<string, unknown>): PopupSpec {
@@ -42,6 +59,7 @@ function popupSpec(layerId: LayerId, p: Record<string, unknown>): PopupSpec {
         color: COLORS.accent,
         rows: [
           ['MMSI', p.mmsi],
+          ['선명', p.name],
           ['VESSEL', p.vessel_id],
           ['시각', typeof p.ts === 'string' ? `${p.ts.slice(0, 16)}Z` : p.ts],
           ['SOG', p.sog != null ? `${p.sog} kn` : null],
@@ -89,12 +107,18 @@ function popupSpec(layerId: LayerId, p: Record<string, unknown>): PopupSpec {
     case 'zones':
       return {
         title: '구역',
-        color: COLORS.steel,
+        color: p.kind === 'gray_zone' ? COLORS.warn : COLORS.steel,
         rows: [
           ['명칭', p.name],
           ['종류', p.kind],
+          ['ZONE', p.zone_id ?? p.id],
         ],
         table: 'zone',
+        srcId: p.zone_id ? String(p.zone_id) : p.id ? String(p.id) : undefined,
+        zoneThreat: {
+          enabled: p.kind === 'gray_zone',
+          zoneId: p.zone_id ? String(p.zone_id) : p.id ? String(p.id) : p.aoi_id ? String(p.aoi_id) : undefined,
+        },
       }
     case 'cables':
       return { title: '해저케이블', color: COLORS.steel, rows: [['명칭', p.name]], table: 'zone' }
@@ -125,11 +149,37 @@ function buildHtml(spec: PopupSpec): string {
   const note = spec.note
     ? `<div style="font-size:11px;color:#8fa3bd;line-height:1.5;margin-top:4px">${esc(spec.note)}</div>`
     : ''
+  const zoneThreat = spec.zoneThreat?.enabled
+    ? `<button data-action="zone-threat" style="font-size:11px;color:#f5a623;background:rgba(245,166,35,.14);border:1px solid rgba(245,166,35,.42);border-radius:2px;padding:2px 8px;cursor:pointer;margin-top:6px;align-self:flex-start">위협 분석</button>
+       <span data-role="zone-status" style="font-size:10px;color:#8fa3bd;margin-top:2px"></span>`
+    : ''
   return `<div style="display:flex;flex-direction:column;gap:2px">
     <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:${spec.color};margin-bottom:2px">${esc(spec.title)}</div>
     ${rows}${note}
-    <button style="font-size:11px;color:#35e0c2;background:rgba(53,224,194,.14);border:1px solid rgba(53,224,194,.4);border-radius:2px;padding:2px 8px;cursor:pointer;margin-top:6px;align-self:flex-start">온톨로지 원본 보기</button>
+    <button data-action="ontology" style="font-size:11px;color:#35e0c2;background:rgba(53,224,194,.14);border:1px solid rgba(53,224,194,.4);border-radius:2px;padding:2px 8px;cursor:pointer;margin-top:6px;align-self:flex-start">온톨로지 원본 보기</button>
+    ${zoneThreat}
   </div>`
+}
+
+function renderedLayerToLayerId(renderedId: string): LayerId {
+  if (renderedId.startsWith(`${sourceId('zones')}-`)) return 'zones'
+  if (renderedId.startsWith(`${sourceId('alerts_geo')}-`)) return 'alerts_geo'
+  return renderedId.replace(/^mda-/, '') as LayerId
+}
+
+function tsAdvanced(prev: string | null, next: string | null): boolean {
+  if (!next) return false
+  if (!prev) return true
+  return new Date(next).getTime() > new Date(prev).getTime()
+}
+
+function isWindowLive(end: string): boolean {
+  return Math.abs(Date.now() - new Date(end).getTime()) <= 2 * 3600_000
+}
+
+function findZoneThreat(threats: Threat[], zoneId?: string): Threat | undefined {
+  if (!zoneId) return undefined
+  return threats.find((threat) => threat.kind === 'zone' && threat.zone_id === zoneId)
 }
 
 function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
@@ -192,13 +242,46 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
       break
     case 'zones':
       map.addLayer({
-        id: src,
+        id: `${src}-gray-fill`,
+        type: 'fill',
+        source: src,
+        filter: ['==', ['get', 'kind'], 'gray_zone'],
+        paint: {
+          'fill-color': COLORS.warn,
+          'fill-opacity': 0.14,
+        },
+      })
+      map.addLayer({
+        id: `${src}-gray-outline`,
         type: 'line',
         source: src,
+        filter: ['==', ['get', 'kind'], 'gray_zone'],
+        paint: {
+          'line-color': COLORS.warn,
+          'line-width': 1.2,
+          'line-opacity': 0.85,
+        },
+      })
+      map.addLayer({
+        id: `${src}-eez`,
+        type: 'line',
+        source: src,
+        filter: ['==', ['get', 'kind'], 'eez'],
         paint: {
           'line-color': COLORS.steel,
           'line-width': 1,
           'line-dasharray': [2, 2],
+          'line-opacity': 0.55,
+        },
+      })
+      map.addLayer({
+        id: `${src}-outline`,
+        type: 'line',
+        source: src,
+        filter: ['all', ['!=', ['get', 'kind'], 'eez'], ['!=', ['get', 'kind'], 'gray_zone']],
+        paint: {
+          'line-color': COLORS.steel,
+          'line-width': 1,
           'line-opacity': 0.55,
         },
       })
@@ -240,32 +323,179 @@ function ensureData(map: maplibregl.Map, def: LayerDef, fc: FeatureCollection): 
   addLayerStyle(map, def)
 }
 
+function removeHighlight(map: maplibregl.Map): void {
+  for (const id of HIGHLIGHT_LAYERS) {
+    if (map.getLayer(id)) map.removeLayer(id)
+  }
+  if (map.getSource(HIGHLIGHT_SOURCE)) map.removeSource(HIGHLIGHT_SOURCE)
+}
+
+function ensureHighlight(map: maplibregl.Map, feature: GeoJSON.Feature): void {
+  const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [feature] }
+  const existing = map.getSource(HIGHLIGHT_SOURCE) as maplibregl.GeoJSONSource | undefined
+  if (existing) {
+    existing.setData(fc)
+    return
+  }
+  map.addSource(HIGHLIGHT_SOURCE, { type: 'geojson', data: fc })
+  map.addLayer({
+    id: `${HIGHLIGHT_SOURCE}-fill`,
+    type: 'fill',
+    source: HIGHLIGHT_SOURCE,
+    paint: {
+      'fill-color': COLORS.warn,
+      'fill-opacity': 0.22,
+    },
+  })
+  map.addLayer({
+    id: `${HIGHLIGHT_SOURCE}-line`,
+    type: 'line',
+    source: HIGHLIGHT_SOURCE,
+    paint: {
+      'line-color': COLORS.warn,
+      'line-width': 3,
+      'line-opacity': 0.95,
+    },
+  })
+  map.addLayer({
+    id: `${HIGHLIGHT_SOURCE}-point`,
+    type: 'circle',
+    source: HIGHLIGHT_SOURCE,
+    paint: {
+      'circle-radius': 8,
+      'circle-color': COLORS.warn,
+      'circle-opacity': 0.95,
+      'circle-stroke-color': '#0a1220',
+      'circle-stroke-width': 2,
+    },
+  })
+}
+
+interface LayerRequestState {
+  inFlight: boolean
+  pending: boolean
+}
+
+interface LatestLayerContext {
+  map: maplibregl.Map | null
+  regionId: string
+  window: TimeWindow
+  layersEnabled: Record<string, boolean>
+  threats: Threat[]
+}
+
+interface LayerDeps {
+  regionId: string
+  start: string
+  end: string
+  layersEnabled: Record<string, boolean>
+}
+
 export default function DataLayers() {
   const map = useMap()
   const state = useAppState()
   const dispatch = useAppDispatch()
   const region = useRegion()
   const popupRef = useRef<maplibregl.Popup | null>(null)
+  const latestRef = useRef<LatestLayerContext>({
+    map,
+    regionId: region.id,
+    window: state.window,
+    layersEnabled: state.layersEnabled,
+    threats: state.threats,
+  })
+  const layerReqRef = useRef<Partial<Record<LayerId, LayerRequestState>>>({})
+  const layerDepsRef = useRef<LayerDeps | null>(null)
+  const changesRef = useRef<Changes | null>(null)
+
+  latestRef.current = {
+    map,
+    regionId: region.id,
+    window: state.window,
+    layersEnabled: state.layersEnabled,
+    threats: state.threats,
+  }
+
+  const requestLayer = useCallback((id: LayerId) => {
+    const ctx = latestRef.current
+    const targetMap = ctx.map
+    if (!targetMap || !ctx.layersEnabled[id]) return
+    const def = LAYER_DEFS.find((item) => item.id === id)
+    if (!def) return
+    const slot = (layerReqRef.current[id] ??= { inFlight: false, pending: false })
+    if (slot.inFlight) {
+      slot.pending = true
+      return
+    }
+    slot.inFlight = true
+    const params = { region: ctx.regionId, start: ctx.window.start, end: ctx.window.end }
+    api
+      .layer(id, params)
+      .then((fc) => {
+        const latest = latestRef.current
+        if (!latest.map || !latest.map.getStyle() || !latest.layersEnabled[id]) return
+        if (
+          latest.regionId !== params.region ||
+          latest.window.start !== params.start ||
+          latest.window.end !== params.end
+        ) {
+          slot.pending = true
+          return
+        }
+        ensureData(latest.map, def, fc)
+      })
+      .catch((err) => console.warn(`layer ${id}`, err))
+      .finally(() => {
+        slot.inFlight = false
+        if (slot.pending) {
+          slot.pending = false
+          requestLayer(id)
+        }
+      })
+  }, [])
 
   useEffect(() => {
     if (!map) return
-    let cancelled = false
+    const prev = layerDepsRef.current
+    const next = {
+      regionId: region.id,
+      start: state.window.start,
+      end: state.window.end,
+      layersEnabled: state.layersEnabled,
+    }
+    const enabledChanged =
+      !prev || LAYER_DEFS.some((def) => prev.layersEnabled[def.id] !== next.layersEnabled[def.id])
+    const regionChanged = !prev || prev.regionId !== next.regionId
+    const windowChanged = !prev || prev.start !== next.start || prev.end !== next.end
+    const liveAisOnly =
+      Boolean(prev) &&
+      state.windowRefreshScope === 'ais' &&
+      windowChanged &&
+      !enabledChanged &&
+      !regionChanged
+
     for (const def of LAYER_DEFS) {
       if (!state.layersEnabled[def.id]) {
         removeLayer(map, def.id)
         continue
       }
-      api
-        .layer(def.id, { region: region.id, start: state.window.start, end: state.window.end })
-        .then((fc) => {
-          if (!cancelled && map.getStyle()) ensureData(map, def, fc)
-        })
-        .catch((err) => console.warn(`layer ${def.id}`, err))
+      if (liveAisOnly && !AIS_LAYER_IDS.has(def.id)) continue
+      requestLayer(def.id)
     }
-    return () => {
-      cancelled = true
-    }
-  }, [map, region.id, state.window.start, state.window.end, state.layersEnabled])
+    layerDepsRef.current = next
+  }, [
+    map,
+    region.id,
+    state.window.start,
+    state.window.end,
+    state.layersEnabled,
+    state.windowRefreshScope,
+    requestLayer,
+  ])
+
+  useEffect(() => {
+    changesRef.current = null
+  }, [region.id])
 
   useEffect(() => {
     if (!map) return
@@ -276,7 +506,7 @@ export default function DataLayers() {
       if (!layers.length) return
       const feature = map.queryRenderedFeatures(e.point, { layers })[0]
       if (!feature) return
-      const layerId = feature.layer.id.replace(/^mda-/, '').replace(/-core$/, '') as LayerId
+      const layerId = renderedLayerToLayerId(feature.layer.id)
       const props = (feature.properties ?? {}) as Record<string, unknown>
       const spec = popupSpec(layerId, props)
       if (layerId === 'alerts_geo' && props.alert_id != null) {
@@ -291,13 +521,23 @@ export default function DataLayers() {
         .setLngLat(anchor)
         .setHTML(buildHtml(spec))
         .addTo(map)
-      popup
-        .getElement()
-        .querySelector('button')
-        ?.addEventListener('click', () => {
-          dispatch({ type: 'ontologyFocus', focus: { table: spec.table, srcId: spec.srcId } })
+      popup.getElement().querySelector('[data-action="ontology"]')?.addEventListener('click', () => {
+        dispatch({ type: 'ontologyFocus', focus: { table: spec.table, srcId: spec.srcId } })
+        popup.remove()
+      })
+      popup.getElement().querySelector('[data-action="zone-threat"]')?.addEventListener('click', () => {
+        const threat = findZoneThreat(latestRef.current.threats, spec.zoneThreat?.zoneId)
+        if (threat) {
+          dispatch({ type: 'selectThreat', id: threat.id })
+          if (threat.lon != null && threat.lat != null) {
+            dispatch({ type: 'focus', target: { lon: threat.lon, lat: threat.lat } })
+          }
           popup.remove()
-        })
+          return
+        }
+        const status = popup.getElement().querySelector('[data-role="zone-status"]')
+        if (status) status.textContent = '존 위협 미산출'
+      })
       popupRef.current = popup
     }
 
@@ -313,6 +553,7 @@ export default function DataLayers() {
       map.off('click', onClick)
       map.off('mousemove', onMove)
       popupRef.current?.remove()
+      removeHighlight(map)
       for (const def of LAYER_DEFS) {
         if (map.getStyle()) removeLayer(map, def.id)
       }
@@ -320,16 +561,59 @@ export default function DataLayers() {
   }, [map, dispatch])
 
   useEffect(() => {
-    const endMs = new Date(state.window.end).getTime()
-    if (Date.now() - endMs > 2 * 3600_000) return
-    const id = window.setInterval(() => {
-      dispatch({
-        type: 'window',
-        window: { start: state.window.start, end: new Date().toISOString() },
-      })
-    }, 60_000)
-    return () => window.clearInterval(id)
-  }, [state.window.start, state.window.end, dispatch])
+    if (!state.settings.autoRefresh || !isWindowLive(state.window.end)) return
+    let cancelled = false
+    const poll = () => {
+      const ctx = latestRef.current
+      if (!state.settings.autoRefresh || !isWindowLive(ctx.window.end)) return
+      api
+        .changes(ctx.regionId)
+        .then((next) => {
+          if (cancelled) return
+          dispatch({
+            type: 'liveStats',
+            stats: {
+              active_vessels_10m: next.active_vessels_10m,
+              ais_rows_1h: next.ais_rows_1h,
+              ais_max_ts: next.ais_max_ts,
+            },
+          })
+          const prev = changesRef.current
+          changesRef.current = next
+          if (!prev) return
+          if (tsAdvanced(prev.ais_max_ts, next.ais_max_ts)) {
+            dispatch({
+              type: 'window',
+              window: { start: ctx.window.start, end: new Date().toISOString() },
+              refreshScope: 'ais',
+            })
+          }
+          if (tsAdvanced(prev.alerts_max_ts, next.alerts_max_ts)) {
+            requestLayer('alerts_geo')
+            dispatch({ type: 'triggerThreatsRefresh' })
+          }
+          if (tsAdvanced(prev.events_max_ts, next.events_max_ts)) requestLayer('events')
+        })
+        .catch((err) => console.warn('changes', err))
+    }
+    poll()
+    const id = window.setInterval(poll, 2_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [state.settings.autoRefresh, state.window.end, dispatch, requestLayer])
+
+  useEffect(() => {
+    if (!map) return
+    if (!state.highlight) {
+      removeHighlight(map)
+      return
+    }
+    ensureHighlight(map, state.highlight)
+    const id = window.setTimeout(() => dispatch({ type: 'highlight', feature: null }), 5_000)
+    return () => window.clearTimeout(id)
+  }, [map, state.highlight, dispatch])
 
   useEffect(() => {
     if (!map || !state.focusTarget) return

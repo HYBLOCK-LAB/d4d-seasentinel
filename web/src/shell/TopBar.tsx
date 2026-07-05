@@ -8,10 +8,20 @@ function fmtWindow(start: string, end: string): string {
   return `${f(start)} → ${f(end)}Z`
 }
 
+function fmtNum(value: number | undefined): string {
+  return (value ?? 0).toLocaleString('ko-KR')
+}
+
+function fmtTime(value: string | null | undefined): string {
+  if (!value) return '·'
+  return value.slice(11, 19)
+}
+
 export function TopBar() {
   const state = useAppState()
   const dispatch = useAppDispatch()
   const counts = state.meta?.counts
+  const activeVessels = state.liveStats?.active_vessels_10m ?? counts?.vessel_active_10m ?? 0
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
@@ -31,12 +41,20 @@ export function TopBar() {
       </select>
       <span className={[styles.window, 'mono'].join(' ')}>{fmtWindow(state.window.start, state.window.end)}</span>
       <div className={styles.spacer} />
-      {counts && (
+      {(counts || state.liveStats) && (
         <div className={styles.kpis}>
-          <Kpi value={counts.vessel ?? 0} label="선박" />
-          <Kpi value={counts.ais_position ?? 0} label="AIS" tone="accent" />
-          <Kpi value={counts.osint_item ?? 0} label="OSINT" />
-          <Kpi value={counts.alert ?? 0} label="경보" tone={counts.alert ? 'warn' : undefined} />
+          <Kpi value={fmtNum(activeVessels)} label="인지 선박(10분)" tone="accent" />
+          <div className={styles.secondaryKpis}>
+            <span>
+              누적 선박 <b className="mono">{fmtNum(counts?.vessel)}</b>
+            </span>
+            <span>
+              AIS 행수 <b className="mono">{fmtNum(state.liveStats?.ais_rows_1h ?? counts?.ais_position)}</b>
+            </span>
+            <span>
+              최근 AIS <b className="mono">{fmtTime(state.liveStats?.ais_max_ts)}</b>
+            </span>
+          </div>
         </div>
       )}
       <div className={styles.actions}>

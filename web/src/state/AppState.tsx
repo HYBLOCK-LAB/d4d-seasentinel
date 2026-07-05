@@ -1,9 +1,17 @@
 import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react'
+import type * as GeoJSON from 'geojson'
 import { api } from '../api/client'
-import type { Meta, Region, TimeWindow } from '../api/types'
+import type { Meta, Region, Threat, TimeWindow } from '../api/types'
 import { DEFAULT_REGION_ID, FALLBACK_REGIONS } from '../constants/regions'
 
 export type RightPanel = 'ontology' | 'copilot' | 'osint' | 'settings' | null
+export type WindowRefreshScope = 'all' | 'ais'
+
+export interface LiveStats {
+  active_vessels_10m: number
+  ais_rows_1h: number
+  ais_max_ts: string | null
+}
 
 export interface Settings {
   theme: 'dark' | 'light'
@@ -21,20 +29,29 @@ export interface AppState {
   rightPanel: RightPanel
   ontologyFocus: { table: string; srcId?: string } | null
   focusTarget: { lon: number; lat: number } | null
+  highlight: GeoJSON.Feature | null
   meta: Meta | null
+  liveStats: LiveStats | null
+  threats: Threat[]
+  threatsRefreshSeq: number
   playing: boolean
   settings: Settings
+  windowRefreshScope: WindowRefreshScope
 }
 
 export type Action =
   | { type: 'meta'; meta: Meta }
   | { type: 'region'; regionId: string }
-  | { type: 'window'; window: TimeWindow }
+  | { type: 'window'; window: TimeWindow; refreshScope?: WindowRefreshScope }
   | { type: 'layer'; id: string; on: boolean }
   | { type: 'selectThreat'; id: string | null }
   | { type: 'rightPanel'; panel: RightPanel }
   | { type: 'ontologyFocus'; focus: { table: string; srcId?: string } | null }
   | { type: 'focus'; target: { lon: number; lat: number } | null }
+  | { type: 'highlight'; feature: GeoJSON.Feature | null }
+  | { type: 'liveStats'; stats: LiveStats }
+  | { type: 'threatsLoaded'; threats: Threat[] }
+  | { type: 'triggerThreatsRefresh' }
   | { type: 'playing'; on: boolean }
   | { type: 'settings'; patch: Partial<Settings> }
 
@@ -83,9 +100,14 @@ export const initialState: AppState = {
   rightPanel: null,
   ontologyFocus: null,
   focusTarget: null,
+  highlight: null,
   meta: null,
+  liveStats: null,
+  threats: [],
+  threatsRefreshSeq: 0,
   playing: false,
   settings: loadSettings(),
+  windowRefreshScope: 'all',
 }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -98,12 +120,19 @@ function reducer(state: AppState, action: Action): AppState {
         regions: action.meta.regions.length ? action.meta.regions : state.regions,
         window: w,
         fullRange: w,
+        windowRefreshScope: 'all',
       }
     }
     case 'region':
-      return { ...state, regionId: action.regionId, selectedThreatId: null }
+      return {
+        ...state,
+        regionId: action.regionId,
+        selectedThreatId: null,
+        threats: [],
+        windowRefreshScope: 'all',
+      }
     case 'window':
-      return { ...state, window: action.window }
+      return { ...state, window: action.window, windowRefreshScope: action.refreshScope ?? 'all' }
     case 'layer':
       return { ...state, layersEnabled: { ...state.layersEnabled, [action.id]: action.on } }
     case 'selectThreat':
@@ -118,6 +147,14 @@ function reducer(state: AppState, action: Action): AppState {
       }
     case 'focus':
       return { ...state, focusTarget: action.target }
+    case 'highlight':
+      return { ...state, highlight: action.feature }
+    case 'liveStats':
+      return { ...state, liveStats: action.stats }
+    case 'threatsLoaded':
+      return { ...state, threats: action.threats }
+    case 'triggerThreatsRefresh':
+      return { ...state, threatsRefreshSeq: state.threatsRefreshSeq + 1 }
     case 'playing':
       return { ...state, playing: action.on }
     case 'settings':

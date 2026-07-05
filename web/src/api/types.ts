@@ -19,8 +19,22 @@ export interface Meta {
   sources: string[]
 }
 
-export type ThreatKind = 'vessel' | 'area'
+export interface Changes {
+  ais_max_ts: string | null
+  ais_rows_1h: number
+  alerts_max_ts: string | null
+  events_max_ts: string | null
+  osint_max_ts: string | null
+  active_vessels_10m: number
+}
+
+export type ThreatKind = 'vessel' | 'area' | 'zone'
 export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'ALERT' | 'WATCH'
+
+export interface ThreatTrendPoint {
+  ts: string
+  score: number
+}
 
 export interface Threat {
   id: string
@@ -37,6 +51,9 @@ export interface Threat {
   generated_at?: string | null
   lon?: number | null
   lat?: number | null
+  zone_id?: string | null
+  summary_ko?: string | null
+  trend?: ThreatTrendPoint[]
 }
 
 export interface Provenance {
@@ -48,6 +65,7 @@ export interface Provenance {
 
 export interface Evidence {
   term: string
+  term_ko?: string | null
   points: number
   detail?: string | null
   src_table: string

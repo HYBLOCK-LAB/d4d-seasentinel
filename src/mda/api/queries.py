@@ -63,6 +63,19 @@ def _iso(value) -> str | None:
     return value.isoformat()
 
 
+def _iso_utc(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    if isinstance(value, date):
+        value = datetime.combine(value, datetime.min.time(), tzinfo=timezone.utc)
+        return value.isoformat().replace("+00:00", "Z")
+    return value.isoformat()
+
+
 def _regions_by_id() -> dict:
     return {r.region_id: r for r in load_regions()}
 
@@ -133,7 +146,71 @@ def get_counts(conn) -> dict:
         with conn.cursor() as cur:
             cur.execute(query)
             counts[table] = cur.fetchone()[0]
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(DISTINCT mmsi) FROM ais_position "
+            "WHERE ts > now() - interval '10 minutes'"
+        )
+        counts["vessel_active_10m"] = cur.fetchone()[0]
     return counts
+
+
+def get_changes(conn, region) -> dict:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+              (
+                SELECT ts FROM ais_position
+                WHERE region_id = %(region_id)s
+                ORDER BY ts DESC
+                LIMIT 1
+              ) AS ais_max_ts,
+              (
+                SELECT count(*) FROM ais_position
+                WHERE region_id = %(region_id)s
+                  AND ts > now() - interval '1 hour'
+              ) AS ais_rows_1h,
+              (
+                SELECT generated_at FROM alert
+                ORDER BY generated_at DESC
+                LIMIT 1
+              ) AS alerts_max_ts,
+              (
+                SELECT event_date::timestamptz FROM event
+                ORDER BY event_date DESC
+                LIMIT 1
+              ) AS events_max_ts,
+              (
+                SELECT ts FROM osint_item
+                ORDER BY ts DESC
+                LIMIT 1
+              ) AS osint_max_ts,
+              (
+                SELECT count(DISTINCT mmsi) FROM ais_position
+                WHERE region_id = %(region_id)s
+                  AND ts > now() - interval '10 minutes'
+              ) AS active_vessels_10m
+            """,
+            {"region_id": region.region_id},
+        )
+        row = cur.fetchone()
+    (
+        ais_max_ts,
+        ais_rows_1h,
+        alerts_max_ts,
+        events_max_ts,
+        osint_max_ts,
+        active_vessels_10m,
+    ) = row
+    return {
+        "ais_max_ts": _iso_utc(ais_max_ts),
+        "ais_rows_1h": ais_rows_1h,
+        "alerts_max_ts": _iso_utc(alerts_max_ts),
+        "events_max_ts": _iso_utc(events_max_ts),
+        "osint_max_ts": _iso_utc(osint_max_ts),
+        "active_vessels_10m": active_vessels_10m,
+    }
 
 
 def get_sources(conn) -> list:
@@ -495,9 +572,12 @@ def _feature_collection(features: list) -> dict:
 def _layer_ais_points(conn, region, start: datetime, end: datetime) -> dict:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT ST_X(geom), ST_Y(geom), mmsi, vessel_id, ts, sog, cog "
-            "FROM ais_position WHERE region_id = %s AND ts BETWEEN %s AND %s "
-            "ORDER BY ts LIMIT 20000",
+            "SELECT DISTINCT ON (p.mmsi) ST_X(p.geom), ST_Y(p.geom), p.mmsi, "
+            "p.vessel_id, v.name, p.ts, p.sog, p.cog "
+            "FROM ais_position p "
+            "LEFT JOIN vessel v ON v.vessel_id = p.vessel_id "
+            "WHERE p.region_id = %s AND p.ts BETWEEN %s AND %s "
+            "ORDER BY p.mmsi, p.ts DESC LIMIT 5000",
             (region.region_id, start, end),
         )
         rows = cur.fetchall()
@@ -505,44 +585,70 @@ def _layer_ais_points(conn, region, start: datetime, end: datetime) -> dict:
         _point_feature(
             lon,
             lat,
-            {"mmsi": mmsi, "vessel_id": vessel_id, "ts": _iso(ts), "sog": sog, "cog": cog},
+            {
+                "mmsi": mmsi,
+                "vessel_id": vessel_id,
+                "name": name,
+                "ts": _iso(ts),
+                "sog": sog,
+                "cog": cog,
+            },
         )
-        for lon, lat, mmsi, vessel_id, ts, sog, cog in rows
+        for lon, lat, mmsi, vessel_id, name, ts, sog, cog in rows
     ]
     return _feature_collection(features)
 
 
-TRACK_SPLIT_GAP = timedelta(hours=1)
-
-
-def _layer_tracks(conn, region, start: datetime, end: datetime) -> dict:
+def _layer_tracks(conn, region, start: datetime, end: datetime, track_minutes: int = 60) -> dict:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT vessel_id, ST_X(geom), ST_Y(geom), ts FROM ais_position "
-            "WHERE region_id = %s AND ts BETWEEN %s AND %s ORDER BY vessel_id, ts",
-            (region.region_id, start, end),
+            """
+            WITH latest AS (
+              SELECT DISTINCT ON (mmsi) mmsi, vessel_id, ts AS latest_ts
+              FROM ais_position
+              WHERE region_id = %s AND ts BETWEEN %s AND %s
+              ORDER BY mmsi, ts DESC
+            ),
+            ranked AS (
+              SELECT
+                p.mmsi,
+                COALESCE(l.vessel_id, p.vessel_id) AS vessel_id,
+                ST_X(p.geom) AS lon,
+                ST_Y(p.geom) AS lat,
+                p.ts,
+                row_number() OVER (PARTITION BY p.mmsi ORDER BY p.ts DESC) AS rn
+              FROM latest l
+              JOIN ais_position p ON p.mmsi = l.mmsi
+              WHERE p.region_id = %s
+                AND p.ts BETWEEN %s AND l.latest_ts
+                AND p.ts >= l.latest_ts - (%s * interval '1 minute')
+            )
+            SELECT mmsi, vessel_id, lon, lat, ts
+            FROM ranked
+            WHERE rn <= 200
+            ORDER BY mmsi, ts
+            """,
+            (region.region_id, start, end, region.region_id, start, track_minutes),
         )
         rows = cur.fetchall()
-    segments: list = []
-    prev_vessel = None
-    prev_ts = None
-    current: list = []
-    for vessel_id, lon, lat, ts in rows:
-        if vessel_id != prev_vessel or (prev_ts is not None and ts - prev_ts > TRACK_SPLIT_GAP):
-            if len(current) >= 2:
-                segments.append((prev_vessel, current))
-            current = []
-        current.append([lon, lat])
-        prev_vessel, prev_ts = vessel_id, ts
-    if len(current) >= 2:
-        segments.append((prev_vessel, current))
+    tracks: dict = {}
+    for mmsi, vessel_id, lon, lat, ts in rows:
+        track = tracks.setdefault(mmsi, {"vessel_id": vessel_id, "coords": []})
+        if track["vessel_id"] is None and vessel_id is not None:
+            track["vessel_id"] = vessel_id
+        track["coords"].append([lon, lat])
     features = [
         {
             "type": "Feature",
-            "geometry": {"type": "LineString", "coordinates": coords},
-            "properties": {"vessel_id": vessel_id, "n": len(coords)},
+            "geometry": {"type": "LineString", "coordinates": track["coords"]},
+            "properties": {
+                "vessel_id": track["vessel_id"],
+                "mmsi": mmsi,
+                "n": len(track["coords"]),
+            },
         }
-        for vessel_id, coords in segments
+        for mmsi, track in tracks.items()
+        if len(track["coords"]) >= 2
     ]
     return _feature_collection(features)
 
