@@ -100,7 +100,7 @@ def _score_trend(conn, dedupe_key: str | None) -> list:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT ts, score FROM threat_score_history WHERE dedupe_key = %s "
+                "SELECT ts, score, config_hash FROM threat_score_history WHERE dedupe_key = %s "
                 "ORDER BY ts DESC LIMIT 10",
                 (dedupe_key,),
             )
@@ -108,7 +108,10 @@ def _score_trend(conn, dedupe_key: str | None) -> list:
     except (errors.UndefinedTable, errors.UndefinedColumn):
         conn.rollback()
         return []
-    return [{"ts": _iso(ts), "score": score} for ts, score in reversed(rows)]
+    return [
+        {"ts": _iso(ts), "score": score, "config_hash": config_hash}
+        for ts, score, config_hash in reversed(rows)
+    ]
 
 
 def _regions_by_id() -> dict:
@@ -979,9 +982,42 @@ def _layer_alerts_geo(conn, region, start: datetime, end: datetime) -> dict:
     return _feature_collection(features)
 
 
+def _layer_sar(conn, region, start: datetime, end: datetime) -> dict:
+    # Satellite (SAR) detections — independent of AIS. Latest up to window end;
+    # unmatched detections (no AIS correlation) are the dark-vessel signal.
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT ST_X(geom), ST_Y(geom), detection_id, ts, sensor, confidence, "
+            "length_est_m, matched_vessel_id FROM sar_detection "
+            "WHERE region_id = %s AND geom IS NOT NULL AND ts <= %s "
+            "ORDER BY ts DESC LIMIT 5000",
+            (region.region_id, end),
+        )
+        rows = cur.fetchall()
+    features = [
+        _point_feature(
+            lon,
+            lat,
+            {
+                "detection_id": detection_id,
+                "ts": _iso(ts),
+                "ts_ms": int(ts.timestamp() * 1000) if ts else None,
+                "sensor": sensor,
+                "confidence": confidence,
+                "length_est_m": length_est_m,
+                "matched": matched_vessel_id is not None,
+                "vessel_id": matched_vessel_id,
+            },
+        )
+        for lon, lat, detection_id, ts, sensor, confidence, length_est_m, matched_vessel_id in rows
+    ]
+    return _feature_collection(features)
+
+
 LAYERS = {
     "ais_points": _layer_ais_points,
     "tracks": _layer_tracks,
+    "sar": _layer_sar,
     "ports": _layer_ports,
     "cables": _layer_cables,
     "zones": _layer_zones,

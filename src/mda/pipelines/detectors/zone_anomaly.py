@@ -266,14 +266,17 @@ def detect(conn: psycopg.Connection, window: Window, params: dict) -> list[Detec
             continue
         z_values = _rolling_z_by_zone(rows, zone_ids, start, end, params)
         for zone_id, (current_value, z_value) in z_values.items():
-            if z_value < min_z:
-                continue
+            # Standing gauge: every finite axis contributes; z below min_z
+            # yields 0 points but keeps the axis visible in evidence.
+            z_eff = max(z_value, 0.0)
+            axis_points = _points_for_axis(params, term, z_eff) if z_eff >= min_z else 0.0
             detections.append(
                 _axis_detection(
                     zones_by_id[zone_id],
                     term,
-                    _points_for_axis(params, term, z_value),
-                    f"current-window value {current_value:.1f}, robust z={z_value:.2f}",
+                    axis_points,
+                    f"current-window value {current_value:.1f}, robust z={z_value:.2f}"
+                    + ("" if z_eff >= min_z else " (정상 범위)"),
                     "zone",
                     zone_id,
                     end,
@@ -325,4 +328,18 @@ def detect(conn: psycopg.Connection, window: Window, params: dict) -> list[Detec
             )
         )
 
+    covered = {d.subject_id for d in detections}
+    for zone_id, zone_row in zones_by_id.items():
+        if zone_id not in covered:
+            detections.append(
+                _axis_detection(
+                    zone_row,
+                    "zone_baseline",
+                    0.0,
+                    "관측 축 이상 없음 — 정상 범위",
+                    "zone",
+                    zone_id,
+                    end,
+                )
+            )
     return [d for d in detections if math.isfinite(d.points)]

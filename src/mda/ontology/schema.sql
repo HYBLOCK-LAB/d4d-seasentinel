@@ -146,6 +146,15 @@ create table if not exists threat_score_history (
     level text,
     primary key (dedupe_key, ts)
 );
+alter table threat_score_history add column if not exists config_hash text;
+
+create table if not exists scoring_override (
+    detector text primary key,
+    enabled boolean,
+    weight real,
+    points real,
+    updated_at timestamptz not null default now()
+);
 
 create table if not exists alert_timeline_step (
     alert_id text not null references alert (alert_id) on delete cascade,

@@ -15,6 +15,7 @@ export const COLORS = {
   steel: '#94b2d1',
   bright: '#e8f0f9',
   dim: '#6b7687',
+  sat: '#b388ff',
 }
 
 export const LAYER_DEFS: LayerDef[] = [
@@ -38,6 +39,13 @@ export const LAYER_DEFS: LayerDef[] = [
     title: 'Vessel tracks',
     titleKo: '항적',
     legend: { kind: 'line', color: COLORS.accent },
+  },
+  {
+    id: 'sar',
+    group: 'DETECTIONS',
+    title: 'Satellite detections (SAR)',
+    titleKo: '위성 탐지(SAR)',
+    legend: { kind: 'outline', color: COLORS.sat },
   },
   {
     id: 'alerts_geo',

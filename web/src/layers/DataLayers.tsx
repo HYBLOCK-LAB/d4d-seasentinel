@@ -85,6 +85,20 @@ function popupSpec(layerId: LayerId, p: Record<string, unknown>): PopupSpec {
         table: 'ais_position',
         srcId: p.vessel_id ? String(p.vessel_id) : undefined,
       }
+    case 'sar':
+      return {
+        title: '위성 탐지(SAR)',
+        color: COLORS.sat,
+        rows: [
+          ['센서', p.sensor],
+          ['신뢰도', typeof p.confidence === 'number' ? p.confidence.toFixed(2) : p.confidence],
+          ['추정 길이', p.length_est_m != null ? `${p.length_est_m} m` : null],
+          ['AIS 매칭', p.matched ? `있음 (${p.vessel_id ?? '·'})` : '없음 (다크)'],
+          ['시각', typeof p.ts === 'string' ? `${p.ts.slice(0, 16)}Z` : p.ts],
+        ],
+        table: 'sar_detection',
+        srcId: p.detection_id ? String(p.detection_id) : undefined,
+      }
     case 'alerts_geo':
       return {
         title: '위협 경보',
@@ -200,11 +214,15 @@ function applyWindowPaint(map: maplibregl.Map, window: TimeWindow): void {
   const aisIn = inWindow('ts_ms', s, e)
   const ais = sourceId('ais_points')
   set(ais, 'circle-color', ['case', aisIn, COLORS.accent, COLORS.dim])
+  // A zoom "interpolate" curve requires constant stop outputs, so the in/out
+  // choice must wrap the whole curve (case -> interpolate), not sit inside the
+  // stops — otherwise setPaintProperty is rejected and the base big radius
+  // sticks, producing big gray dots for out-of-window fixes.
   set(ais, 'circle-radius', [
-    'interpolate', ['linear'], ['zoom'],
-    4, ['case', aisIn, 2.5, 1.4],
-    8, ['case', aisIn, 4, 2],
-    12, ['case', aisIn, 6, 3],
+    'case',
+    aisIn,
+    ['interpolate', ['linear'], ['zoom'], 4, 2.5, 8, 4, 12, 6],
+    ['interpolate', ['linear'], ['zoom'], 4, 1.4, 8, 2, 12, 3],
   ])
   set(ais, 'circle-opacity', ['case', aisIn, 0.9, 0.4])
   set(ais, 'circle-stroke-width', ['case', aisIn, 1, 0])
@@ -212,12 +230,26 @@ function applyWindowPaint(map: maplibregl.Map, window: TimeWindow): void {
   const gfw = sourceId('gfw_events')
   set(gfw, 'circle-color', ['case', gfwIn, COLORS.warn, COLORS.dim])
   set(gfw, 'circle-radius', [
-    'interpolate', ['linear'], ['zoom'],
-    4, ['case', gfwIn, 2, 1.2],
-    8, ['case', gfwIn, 3, 2],
-    12, ['case', gfwIn, 4.5, 3],
+    'case',
+    gfwIn,
+    ['interpolate', ['linear'], ['zoom'], 4, 2, 8, 3, 12, 4.5],
+    ['interpolate', ['linear'], ['zoom'], 4, 1.2, 8, 2, 12, 3],
   ])
   set(gfw, 'circle-opacity', ['case', gfwIn, 0.8, 0.35])
+  const sarIn = inWindow('ts_ms', s, e)
+  const sar = sourceId('sar')
+  set(sar, 'circle-stroke-opacity', [
+    'case',
+    sarIn,
+    ['case', ['get', 'matched'], 0.5, 0.95],
+    0.25,
+  ])
+  set(sar, 'circle-radius', [
+    'case',
+    sarIn,
+    ['interpolate', ['linear'], ['zoom'], 4, 4, 8, 5.5, 12, 7.5],
+    ['interpolate', ['linear'], ['zoom'], 4, 2.5, 8, 3.5, 12, 4.5],
+  ])
   const alIn = inWindow('gen_ms', s, e)
   set(`${sourceId('alerts_geo')}-core`, 'circle-color', ['case', alIn, COLORS.crit, COLORS.dim])
   set(`${sourceId('alerts_geo')}-core`, 'circle-radius', ['case', alIn, 5, 3])
@@ -281,6 +313,23 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
         type: 'line',
         source: src,
         paint: { 'line-color': COLORS.accent, 'line-width': 1.2, 'line-opacity': 0.5 },
+      })
+      break
+    case 'sar':
+      // Satellite (SAR) detections as hollow rings so they read as distinct from
+      // filled AIS dots. Unmatched detections (no AIS) are the dark-vessel signal
+      // — thicker, brighter ring; matched ones are thin/subtle.
+      map.addLayer({
+        id: src,
+        type: 'circle',
+        source: src,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 4, 8, 5.5, 12, 7.5],
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': COLORS.sat,
+          'circle-stroke-width': ['case', ['get', 'matched'], 1, 2.2],
+          'circle-stroke-opacity': ['case', ['get', 'matched'], 0.5, 0.95],
+        },
       })
       break
     case 'alerts_geo':

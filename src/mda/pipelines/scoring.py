@@ -61,8 +61,9 @@ def make_dedupe_key(alert_type: str, subject_id: str) -> str:
 
 
 def alert_type_for_subject(subject_type: str) -> str:
+    # Zone-level items are standing precursor gauges, not one-off anomalies.
     if subject_type == "zone":
-        return "zone_threat"
+        return "precursor"
     return "vessel_threat"
 
 
@@ -112,8 +113,8 @@ def _titles(subject_type: str, subject_id: str, detections: list[Detection], sco
     top = ", ".join(dict.fromkeys(top_terms[:3])) or "evidence mix"
     if subject_type == "zone":
         return (
-            f"{subject_id} 구역 위협 점수 {score:.0f} — {top}",
-            f"{subject_id} zone threat score {score:.0f} — {top}",
+            f"{subject_id} 사전 징후 지수 {score:.0f} — {top}",
+            f"{subject_id} precursor index {score:.0f} — {top}",
         )
     return (
         f"{subject_id} 선박 위협 점수 {score:.0f} — {top}",
@@ -151,7 +152,9 @@ def _alert_rows(
     min_alert = float(thresholds.get("min_alert", 0.0))
     for (subject_type, subject_id), detections in grouped.items():
         score, level = score_detections(detections, thresholds)
-        if score < min_alert:
+        # Precursor gauges stay visible at any score; the floor only prunes
+        # low-signal vessel alerts.
+        if subject_type == "vessel" and score < min_alert:
             continue
         alert_type = alert_type_for_subject(subject_type)
         dedupe_key = make_dedupe_key(alert_type, subject_id)
@@ -270,16 +273,45 @@ def _insert_history(conn: psycopg.Connection, rows: list[dict]) -> int:
         return 0
     with conn.cursor() as cur:
         cur.executemany(
-            "insert into threat_score_history (dedupe_key, ts, score, level) "
-            "values (%(dedupe_key)s, %(ts)s, %(score)s, %(level)s) "
+            "insert into threat_score_history (dedupe_key, ts, score, level, config_hash) "
+            "values (%(dedupe_key)s, %(ts)s, %(score)s, %(level)s, %(config_hash)s) "
             "on conflict (dedupe_key, ts) do nothing",
             rows,
         )
     return len(rows)
 
 
-def _upsert_method(conn: psycopg.Connection) -> None:
-    config_hash = hashlib.sha1(config_path("scoring.yaml").read_bytes()).hexdigest()[:16]
+def effective_config_hash(cfg: ScoringConfig) -> str:
+    # Includes DB overrides so trend segments can be attributed to the exact
+    # weight set that produced each score.
+    payload = config_path("scoring.yaml").read_bytes() + json.dumps(
+        cfg.detectors, sort_keys=True, default=str
+    ).encode()
+    return hashlib.sha1(payload).hexdigest()[:16]
+
+
+def merge_db_overrides(conn: psycopg.Connection, cfg: ScoringConfig) -> ScoringConfig:
+    try:
+        with conn.cursor() as cur:
+            cur.execute("select detector, enabled, weight, points from scoring_override")
+            rows = cur.fetchall()
+    except psycopg.Error:
+        conn.rollback()
+        return cfg
+    for detector, enabled, weight, points in rows:
+        block = cfg.detectors.get(detector)
+        if block is None:
+            continue
+        if enabled is not None:
+            block["enabled"] = enabled
+        if weight is not None:
+            block["weight"] = float(weight)
+        if points is not None and "points" in block:
+            block["points"] = float(points)
+    return cfg
+
+
+def _upsert_method(conn: psycopg.Connection, config_hash: str) -> None:
     pg.upsert(
         conn,
         "method_registry",
@@ -319,6 +351,8 @@ def run_scoring(
     generated_at = datetime.now(timezone.utc)
 
     with pg.connect() as conn:
+        cfg = merge_db_overrides(conn, cfg)
+        config_hash = effective_config_hash(cfg)
         detections, detector_counts = _run_detectors(conn, cfg, window, min_gap_hours, cable_km)
         grouped: dict[tuple[str, str], list[Detection]] = defaultdict(list)
         for detection in detections:
@@ -327,7 +361,9 @@ def run_scoring(
         alert_rows, evidence_rows, history_rows, by_type, by_subject_type = _alert_rows(
             conn, grouped, cfg.thresholds, generated_at
         )
-        _upsert_method(conn)
+        for row in history_rows:
+            row["config_hash"] = config_hash
+        _upsert_method(conn, config_hash)
         alert_ids = _upsert_alerts(conn, alert_rows)
         evidence_count = _replace_evidence(conn, evidence_rows, alert_ids)
         history_count = _insert_history(conn, history_rows)

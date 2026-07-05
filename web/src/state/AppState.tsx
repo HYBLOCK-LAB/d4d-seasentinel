@@ -73,6 +73,7 @@ export const DEFAULT_LAYERS: Record<string, boolean> = {
   gfw_events: true,
   ais_points: true,
   tracks: true,
+  sar: true,
   alerts_geo: true,
   events: true,
   zones: true,

@@ -14,15 +14,28 @@ function Sparkline({ trend }: { trend?: Threat['trend'] }) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = Math.max(max - min, 1);
+  const xAt = (index: number) => (index / Math.max(points.length - 1, 1)) * 46 + 1;
   const path = points
     .map((item, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * 46 + 1;
       const y = 15 - ((item.score - min) / span) * 13;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
+      return `${xAt(index).toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
+  // Weight-set changes are marked so a score jump caused by re-tuned criteria
+  // is not mistaken for a real threat change.
+  const configMarks = points
+    .map((item, index) => {
+      const prev = index > 0 ? points[index - 1] : undefined;
+      return prev?.config_hash && item.config_hash && item.config_hash !== prev.config_hash
+        ? xAt(index)
+        : null;
+    })
+    .filter((x): x is number => x != null);
   return (
     <svg className={styles.sparkline} viewBox="0 0 48 16" aria-hidden="true">
+      {configMarks.map((x) => (
+        <line key={x} x1={x} x2={x} y1={1} y2={15} stroke="#f5a623" strokeWidth={0.8} strokeDasharray="1.5 1.5" />
+      ))}
       <polyline points={path} />
     </svg>
   );
@@ -127,6 +140,7 @@ export default function ThreatsPanel() {
             >
               <div className={styles.line1}>
                 <Badge level={threat.level}>{threat.level}</Badge>
+                {threat.type === 'precursor' && <Badge level="WATCH">사전 징후</Badge>}
                 <span className={styles.title}>{threat.title_ko}</span>
                 <Sparkline trend={threat.trend} />
                 <span className={`mono ${styles.score}`}>{threat.score.toFixed(1)}</span>

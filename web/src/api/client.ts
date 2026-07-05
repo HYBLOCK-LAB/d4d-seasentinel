@@ -2,6 +2,8 @@ import type {
   Changes,
   DatasetList,
   FeatureCollection,
+  ScoringConfig,
+  ScoringDetector,
   LayerId,
   Meta,
   OntologyRows,
@@ -40,6 +42,16 @@ async function post<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function putJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${path} ${res.status}`)
+  return res.json() as Promise<T>
+}
+
 export interface WindowParams {
   region: string
   start: string
@@ -62,6 +74,10 @@ export const api = {
     get<OntologyRows>(`/ontology/${table}`, { limit, offset }),
   models: () => get<{ models: string[]; default: string }>('/models'),
   datasets: () => get<DatasetList>('/datasets'),
+  scoringConfig: () => get<ScoringConfig>('/scoring/config'),
+  updateScoring: (detectors: Array<Partial<ScoringDetector> & { name: string }>) =>
+    putJson<{ updated: number }>('/scoring/config', { detectors }),
+  rerunScoring: () => post<{ started: boolean }>('/scoring/rerun'),
 }
 
 export async function copilotStream(

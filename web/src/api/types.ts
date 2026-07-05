@@ -48,6 +48,25 @@ export type ThreatLevel = 'CRITICAL' | 'HIGH' | 'MED' | 'ALERT' | 'WATCH'
 export interface ThreatTrendPoint {
   ts: string
   score: number
+  config_hash?: string | null
+}
+
+export interface ScoringDetector {
+  name: string
+  label_ko: string
+  tier?: string | null
+  rationale_ko?: string | null
+  enabled: boolean
+  weight: number
+  points?: number | null
+  default_weight: number
+  default_points?: number | null
+  overridden: boolean
+}
+
+export interface ScoringConfig {
+  thresholds: Record<string, number>
+  detectors: ScoringDetector[]
 }
 
 export interface Threat {
@@ -114,6 +133,7 @@ export interface OntologyRows {
 export type LayerId =
   | 'ais_points'
   | 'tracks'
+  | 'sar'
   | 'ports'
   | 'cables'
   | 'zones'
