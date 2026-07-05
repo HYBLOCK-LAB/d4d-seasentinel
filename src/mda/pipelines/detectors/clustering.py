@@ -26,7 +26,10 @@ def detect(conn: psycopg.Connection, window: Window, params: dict) -> list[Detec
                 "  group by coalesce(region_id, 'unknown'), cid "
                 "  having count(distinct vessel_id) >= %s"
                 ") "
-                "select distinct c.vessel_id, s.region_id, s.cid, s.vessel_count, s.last_ts, s.lon, s.lat "
+                "select distinct c.vessel_id, s.region_id, s.cid, s.vessel_count, s.last_ts, s.lon, s.lat, "
+                "exists(select 1 from zone z where z.kind = 'eez' "
+                "  and z.name ilike %s and z.name not ilike %s "
+                "  and ST_Contains(z.geom, ST_SetSRID(ST_MakePoint(s.lon, s.lat), 4326))) as home "
                 "from clustered c "
                 "join cluster_stats s on coalesce(c.region_id, 'unknown') = s.region_id and c.cid = s.cid",
                 (
@@ -35,6 +38,8 @@ def detect(conn: psycopg.Connection, window: Window, params: dict) -> list[Detec
                     start,
                     end,
                     params["min_size"],
+                    params.get("home_eez_ilike", "%korea%"),
+                    params.get("home_eez_exclude_ilike", "%north%"),
                 ),
             )
             rows = cur.fetchall()
@@ -42,18 +47,20 @@ def detect(conn: psycopg.Connection, window: Window, params: dict) -> list[Detec
         rollback(conn)
         return []
 
+    home_factor = float(params.get("home_factor", 0.35))
     return [
         Detection(
             subject_type="vessel",
             subject_id=vessel_id,
             term="clustering",
-            points=params["points"],
+            points=params["points"] * (home_factor if home else 1.0),
             src_table="ais_position",
             src_id=f"{region_id}:cluster:{cid}",
-            detail=f"cluster of {vessel_count} vessels in {region_id}",
+            detail=f"cluster of {vessel_count} vessels in {region_id}"
+            + (" (home waters, damped)" if home else ""),
             lon=lon,
             lat=lat,
             ts=last_ts,
         )
-        for vessel_id, region_id, cid, vessel_count, last_ts, lon, lat in rows
+        for vessel_id, region_id, cid, vessel_count, last_ts, lon, lat, home in rows
     ]

@@ -799,14 +799,13 @@ def _layer_tracks(conn, region, start: datetime, end: datetime, track_minutes: i
               JOIN ais_position p ON p.mmsi = l.mmsi
               WHERE p.region_id = %s
                 AND p.ts BETWEEN %s AND l.latest_ts
-                AND p.ts >= l.latest_ts - (%s * interval '1 minute')
             )
             SELECT mmsi, vessel_id, lon, lat, ts
             FROM ranked
-            WHERE rn <= 200
+            WHERE rn <= 10
             ORDER BY mmsi, ts
             """,
-            (region.region_id, start, end, region.region_id, start, track_minutes),
+            (region.region_id, start, end, region.region_id, start),
         )
         rows = cur.fetchall()
     tracks: dict = {}
@@ -856,17 +855,18 @@ def _layer_cables(conn, region, start: datetime, end: datetime) -> dict:
 def _layer_zones(conn, region, start: datetime, end: datetime) -> dict:
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT ST_AsGeoJSON(geom), name, kind FROM zone "
-            "WHERE kind IN ('aoi', 'region') OR kind LIKE 'geofence%%'"
+            "SELECT ST_AsGeoJSON(geom), name, kind, zone_id FROM zone "
+            "WHERE kind IN ('aoi', 'region', 'eez', 'gray_zone', 'territorial') "
+            "OR kind LIKE 'geofence%%'"
         )
         rows = cur.fetchall()
     features = [
         {
             "type": "Feature",
             "geometry": json.loads(geom_json),
-            "properties": {"name": name, "kind": kind},
+            "properties": {"name": name, "kind": kind, "zone_id": zone_id},
         }
-        for geom_json, name, kind in rows
+        for geom_json, name, kind, zone_id in rows
     ]
     return _feature_collection(features)
 

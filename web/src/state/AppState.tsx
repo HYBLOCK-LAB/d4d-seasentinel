@@ -13,6 +13,18 @@ export interface LiveStats {
   ais_max_ts: string | null
 }
 
+export interface HighlightPopup {
+  title: string
+  rows: Array<[string, string]>
+  table: string
+  srcId?: string
+}
+
+export interface Highlight {
+  feature: GeoJSON.Feature
+  popup?: HighlightPopup
+}
+
 export interface Settings {
   theme: 'dark' | 'light'
   model: string
@@ -31,7 +43,7 @@ export interface AppState {
   rightPanel: RightPanel
   ontologyFocus: { table: string; srcId?: string } | null
   focusTarget: { lon: number; lat: number } | null
-  highlight: GeoJSON.Feature | null
+  highlight: Highlight | null
   meta: Meta | null
   liveStats: LiveStats | null
   threats: Threat[]
@@ -50,7 +62,7 @@ export type Action =
   | { type: 'rightPanel'; panel: RightPanel }
   | { type: 'ontologyFocus'; focus: { table: string; srcId?: string } | null }
   | { type: 'focus'; target: { lon: number; lat: number } | null }
-  | { type: 'highlight'; feature: GeoJSON.Feature | null }
+  | { type: 'highlight'; feature: GeoJSON.Feature | null; popup?: HighlightPopup }
   | { type: 'liveStats'; stats: LiveStats }
   | { type: 'threatsLoaded'; threats: Threat[] }
   | { type: 'triggerThreatsRefresh' }
@@ -156,7 +168,10 @@ function reducer(state: AppState, action: Action): AppState {
     case 'focus':
       return { ...state, focusTarget: action.target }
     case 'highlight':
-      return { ...state, highlight: action.feature }
+      return {
+        ...state,
+        highlight: action.feature ? { feature: action.feature, popup: action.popup } : null,
+      }
     case 'liveStats':
       return { ...state, liveStats: action.stats }
     case 'threatsLoaded':

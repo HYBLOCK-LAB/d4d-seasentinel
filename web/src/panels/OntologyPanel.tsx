@@ -179,12 +179,32 @@ export function OntologyPanel() {
     };
   }
 
-  function handleMapClick(event: MouseEvent<HTMLButtonElement>, feature: GeoJSON.Feature) {
+  function handleMapClick(event: MouseEvent<HTMLButtonElement>, feature: GeoJSON.Feature, row: unknown[]) {
     event.stopPropagation();
     const centroid = centroidOf(feature);
     if (!centroid) return;
+    const columns = data?.columns ?? [];
+    const popupRows = columns
+      .map((col, i) => [col, row[i]] as [string, unknown])
+      .filter(
+        ([, v]) =>
+          v != null &&
+          typeof v !== 'object' &&
+          !(typeof v === 'string' && (isGeometryish(v) || v.length > 80)),
+      )
+      .slice(0, 6)
+      .map(([c, v]) => [c, String(v)] as [string, string]);
     dispatch({ type: 'focus', target: centroid });
-    dispatch({ type: 'highlight', feature });
+    dispatch({
+      type: 'highlight',
+      feature,
+      popup: {
+        title: selectedTable,
+        rows: popupRows,
+        table: selectedTable,
+        srcId: row[0] != null ? String(row[0]) : undefined,
+      },
+    });
   }
 
   return (
@@ -251,7 +271,7 @@ export function OntologyPanel() {
                           <button
                             type="button"
                             className={styles.mapButton}
-                            onClick={(event) => handleMapClick(event, feature)}
+                            onClick={(event) => handleMapClick(event, feature, row)}
                           >
                             지도
                           </button>

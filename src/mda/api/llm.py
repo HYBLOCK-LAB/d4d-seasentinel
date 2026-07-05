@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -41,6 +42,8 @@ DIGEST_SYSTEM_PROMPT = (
 JUNK_MODEL_IDS = {"high", "low", "medium", "gemini", "gpt", "chat_20706", "chat_23310"}
 
 router = APIRouter()
+
+_digest_cache: dict[str, dict] = {}
 
 
 class CopilotRequest(BaseModel):
@@ -161,6 +164,10 @@ async def osint_digest(request: DigestRequest) -> dict:
         ensure_ascii=False,
     )
     used_model = request.model or LLM_MODEL
+    cache_key = hashlib.sha1(f"{used_model}\n{user_content}".encode()).hexdigest()
+    cached = _digest_cache.get(cache_key)
+    if cached is not None:
+        return {**cached, "cached": True}
     payload = {
         "model": used_model,
         "messages": [
@@ -194,9 +201,13 @@ async def osint_digest(request: DigestRequest) -> dict:
     except Exception:
         return {"items": [], "error": "parse"}
 
-    return {
+    result = {
         "items": parsed_items,
         "model": used_model,
         "note": "LLM 생성 분석 — 근거 원문 확인 필수",
         "input_count": len(items),
     }
+    if len(_digest_cache) > 64:
+        _digest_cache.clear()
+    _digest_cache[cache_key] = result
+    return result

@@ -4,11 +4,11 @@ thresholds:
 detectors:
   ais_gap:
     enabled: true
-    weight: 1.0
+    weight: 0.6
     min_gap_hours: 6.0
-    points_base: 40.0
-    points_per_hour: 2.0
-    coverage_bonus: 10.0
+    points_base: 15.0
+    points_per_hour: 0.5
+    coverage_bonus: 5.0
   cable_proximity:
     enabled: true
     weight: 1.0
@@ -41,6 +41,9 @@ detectors:
     dbscan_minpoints: 3
     min_size: 8
     points: 16.0
+    home_factor: 0.35
+    home_eez_ilike: '%korea%'
+    home_eez_exclude_ilike: '%north%'
   course_change:
     enabled: true
     weight: 1.0

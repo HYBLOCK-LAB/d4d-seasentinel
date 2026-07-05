@@ -178,6 +178,25 @@ function renderedLayerToLayerId(renderedId: string): LayerId {
   return renderedId.replace(/^mda-/, '') as LayerId
 }
 
+function featureCentroid(feature: GeoJSON.Feature): [number, number] | null {
+  const pts: Array<[number, number]> = []
+  const walk = (v: unknown): void => {
+    if (!Array.isArray(v)) return
+    if (v.length >= 2 && typeof v[0] === 'number' && typeof v[1] === 'number') {
+      pts.push([v[0], v[1]])
+      return
+    }
+    v.forEach(walk)
+  }
+  const geom = feature.geometry
+  if (!geom) return null
+  if (geom.type === 'GeometryCollection') geom.geometries.forEach((g) => walk((g as { coordinates?: unknown }).coordinates))
+  else walk((geom as { coordinates?: unknown }).coordinates)
+  if (!pts.length) return null
+  const [sx, sy] = pts.reduce(([ax, ay], [x, y]) => [ax + x, ay + y], [0, 0])
+  return [sx / pts.length, sy / pts.length]
+}
+
 function tsAdvanced(prev: string | null, next: string | null): boolean {
   if (!next) return false
   if (!prev) return true
@@ -636,7 +655,31 @@ export default function DataLayers() {
       removeHighlight(map)
       return
     }
-    ensureHighlight(map, state.highlight)
+    ensureHighlight(map, state.highlight.feature)
+    const popupInfo = state.highlight.popup
+    if (popupInfo) {
+      const anchor = featureCentroid(state.highlight.feature)
+      if (anchor) {
+        popupRef.current?.remove()
+        const popup = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+          .setLngLat(anchor)
+          .setHTML(
+            buildHtml({
+              title: popupInfo.title,
+              color: COLORS.accent,
+              rows: popupInfo.rows,
+              table: popupInfo.table,
+              srcId: popupInfo.srcId,
+            }),
+          )
+          .addTo(map)
+        popup.getElement().querySelector('[data-action="ontology"]')?.addEventListener('click', () => {
+          dispatch({ type: 'ontologyFocus', focus: { table: popupInfo.table, srcId: popupInfo.srcId } })
+          popup.remove()
+        })
+        popupRef.current = popup
+      }
+    }
     const id = window.setTimeout(() => dispatch({ type: 'highlight', feature: null }), 5_000)
     return () => window.clearTimeout(id)
   }, [map, state.highlight, dispatch])

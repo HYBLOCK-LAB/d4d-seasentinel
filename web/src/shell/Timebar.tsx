@@ -211,6 +211,7 @@ export function Timebar() {
         dispatch({
           type: 'window',
           window: { start: new Date(nextStart).toISOString(), end: new Date(nextEnd).toISOString() },
+          refreshScope: 'ais',
         });
         dispatch({ type: 'playing', on: false });
         return;
@@ -218,6 +219,7 @@ export function Timebar() {
       dispatch({
         type: 'window',
         window: { start: new Date(nextStart).toISOString(), end: new Date(nextEnd).toISOString() },
+        refreshScope: 'ais',
       });
     }, PLAY_INTERVAL_MS / speed);
     return () => window.clearInterval(id);
