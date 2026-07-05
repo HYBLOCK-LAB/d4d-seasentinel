@@ -107,7 +107,14 @@ def _cmd_collect_reference(args) -> None:
 def _cmd_analyze(args) -> None:
     from mda.pipelines import scoring
 
-    print(scoring.run_scoring(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
+    print(
+        scoring.run_scoring(
+            min_gap_hours=args.min_gap_hours,
+            cable_km=args.cable_km,
+            explain=args.explain,
+            top=args.top,
+        )
+    )
 
 
 def _cmd_foundry_sync(args) -> None:
@@ -242,8 +249,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("collect-reference").set_defaults(func=_cmd_collect_reference)
 
     an = sub.add_parser("analyze")
-    an.add_argument("--min-gap-hours", type=float, default=6.0)
-    an.add_argument("--cable-km", type=float, default=3.0)
+    an.add_argument("--min-gap-hours", type=float, default=None)
+    an.add_argument("--cable-km", type=float, default=None)
+    an.add_argument("--explain", action="store_true")
+    an.add_argument("--top", type=int, default=20)
     an.set_defaults(func=_cmd_analyze)
 
     ed = sub.add_parser("export-dashboard")
