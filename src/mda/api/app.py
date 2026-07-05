@@ -3,12 +3,14 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 
-from mda.api import llm, queries
+from mda.api import assess, llm, queries, sitrep
 from mda.paths import repo_root
 from mda.store import pg
 
 app = FastAPI(title="SeaSentinel MDA API")
 app.include_router(llm.router, prefix="/api")
+app.include_router(assess.router, prefix="/api")
+app.include_router(sitrep.router, prefix="/api")
 
 
 @app.get("/api/health")

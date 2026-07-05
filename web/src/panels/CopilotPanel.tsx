@@ -99,6 +99,63 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_threats',
+      description: '현재 해역·시간창의 위협 목록을 조회한다 (score 내림차순 상위 20건 반환)',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_threat_evidence',
+      description: '특정 위협의 근거 항목(term·points·원천 테이블·provenance)을 조회한다',
+      parameters: {
+        type: 'object',
+        properties: { threat_id: { type: 'string' } },
+        required: ['threat_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_osint',
+      description: '현재 해역·시간창의 OSINT 수집 항목(텔레그램·다크웹 등)을 조회한다 (최근 30건)',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_timeline',
+      description: '현재 해역·시간창의 시간대별 활동 히스토그램(AIS·OSINT·경보 수)을 조회한다',
+      parameters: {
+        type: 'object',
+        properties: { bucket: { type: 'string', enum: ['hour', 'day'] } },
+        required: ['bucket'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'assess_threat',
+      description:
+        '분석관 확인 결과를 위협도 조정 인자(evidence)로 기록한다. dismiss=위협 아님 확인(-40점), lower=위험 낮음(-20점), raise=위험 상향(+15점). 선박/존 경보에만 적용 가능하며 reason에 확인 내용을 기록한다',
+      parameters: {
+        type: 'object',
+        properties: {
+          threat_id: { type: 'string' },
+          action: { type: 'string', enum: ['dismiss', 'lower', 'raise'] },
+          reason: { type: 'string' },
+        },
+        required: ['threat_id', 'action', 'reason'],
+      },
+    },
+  },
 ];
 
 type OpenAiMessage = Record<string, unknown>;
@@ -127,7 +184,19 @@ export function CopilotPanel() {
     }
   }, [messages]);
 
-  function executeTool(name: string, args: Record<string, unknown>): string {
+  function windowQs(): string {
+    return `region=${encodeURIComponent(state.regionId)}&start=${encodeURIComponent(
+      state.window.start,
+    )}&end=${encodeURIComponent(state.window.end)}`;
+  }
+
+  async function fetchJson(path: string): Promise<unknown> {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`${path} ${res.status}`);
+    return res.json();
+  }
+
+  async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
       case 'set_region':
         dispatch({ type: 'region', regionId: String(args.region_id) });
@@ -147,6 +216,60 @@ export function CopilotPanel() {
       case 'open_panel':
         dispatch({ type: 'rightPanel', panel: args.panel as 'ontology' | 'osint' | 'copilot' });
         return `${args.panel} 패널을 열었습니다`;
+      case 'get_threats': {
+        const data = (await fetchJson(`/api/threats?${windowQs()}`)) as {
+          threats: Array<Record<string, unknown>>;
+        };
+        const top = [...data.threats]
+          .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
+          .slice(0, 20)
+          .map((t) => ({
+            id: t.id,
+            kind: t.kind,
+            type: t.type,
+            level: t.level,
+            score: t.score,
+            title_ko: t.title_ko,
+            vessel_id: t.vessel_id,
+            aoi_id: t.aoi_id,
+            generated_at: t.generated_at,
+          }));
+        return JSON.stringify({ total: data.threats.length, top });
+      }
+      case 'get_threat_evidence':
+        return JSON.stringify(
+          await fetchJson(`/api/threats/${encodeURIComponent(String(args.threat_id))}/evidence`),
+        );
+      case 'get_osint': {
+        const data = (await fetchJson(`/api/osint?${windowQs()}`)) as {
+          items: Array<Record<string, unknown>>;
+        };
+        const items = data.items.slice(0, 30).map((it) => ({
+          id: it.id,
+          ts: it.ts,
+          kind: it.kind,
+          source: it.source,
+          text: String(it.text ?? '').slice(0, 200),
+        }));
+        return JSON.stringify({ total: data.items.length, items });
+      }
+      case 'get_timeline':
+        return JSON.stringify(
+          await fetchJson(`/api/timeline?${windowQs()}&bucket=${args.bucket === 'day' ? 'day' : 'hour'}`),
+        );
+      case 'assess_threat': {
+        const res = await fetch(`/api/threats/${encodeURIComponent(String(args.threat_id))}/assess`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: args.action, reason: args.reason }),
+        });
+        if (!res.ok) {
+          return `조정 실패 (${res.status}): ${await res.text()}`;
+        }
+        const data = (await res.json()) as Record<string, unknown>;
+        dispatch({ type: 'triggerThreatsRefresh' });
+        return JSON.stringify(data);
+      }
       default:
         return `알 수 없는 도구: ${name}`;
     }
@@ -171,7 +294,7 @@ export function CopilotPanel() {
     setInput('');
     setMessages((prev) => [...prev, { role: 'user', text: query }]);
     setStreaming(true);
-    const context = `region=${state.regionId} window=${state.window.start}..${state.window.end}${
+    const context = `now=${new Date().toISOString()} region=${state.regionId} window=${state.window.start}..${state.window.end}${
       state.selectedThreatId ? ` selected_threat=${state.selectedThreatId}` : ''
     }`;
     convoRef.current.push({
@@ -180,7 +303,7 @@ export function CopilotPanel() {
     });
     const chips: string[] = [];
     try {
-      for (let round = 0; round < 4; round += 1) {
+      for (let round = 0; round < 6; round += 1) {
         const message = await agentCall(convoRef.current);
         const toolCalls = (message.tool_calls ?? []) as Array<{
           id: string;
@@ -201,11 +324,16 @@ export function CopilotPanel() {
           } catch {
             args = {};
           }
-          const result = executeTool(call.function.name, args);
+          let result: string;
+          try {
+            result = await executeTool(call.function.name, args);
+          } catch (err) {
+            result = `도구 실행 실패: ${err instanceof Error ? err.message : String(err)}`;
+          }
           chips.push(`${call.function.name} 실행`);
           convoRef.current.push({ role: 'tool', tool_call_id: call.id, content: result });
         }
-        if (round === 3) {
+        if (round === 5) {
           setMessages((prev) => [
             ...prev,
             { role: 'assistant', text: '(도구 실행 완료)', toolChips: [...chips] },

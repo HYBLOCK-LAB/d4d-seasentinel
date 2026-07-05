@@ -22,6 +22,7 @@ export interface AppState {
   ontologyFocus: { table: string; srcId?: string } | null
   focusTarget: { lon: number; lat: number } | null
   meta: Meta | null
+  threatsRefreshSeq: number
   playing: boolean
   settings: Settings
 }
@@ -35,6 +36,7 @@ export type Action =
   | { type: 'rightPanel'; panel: RightPanel }
   | { type: 'ontologyFocus'; focus: { table: string; srcId?: string } | null }
   | { type: 'focus'; target: { lon: number; lat: number } | null }
+  | { type: 'triggerThreatsRefresh' }
   | { type: 'playing'; on: boolean }
   | { type: 'settings'; patch: Partial<Settings> }
 
@@ -84,6 +86,7 @@ export const initialState: AppState = {
   ontologyFocus: null,
   focusTarget: null,
   meta: null,
+  threatsRefreshSeq: 0,
   playing: false,
   settings: loadSettings(),
 }
@@ -118,6 +121,8 @@ function reducer(state: AppState, action: Action): AppState {
       }
     case 'focus':
       return { ...state, focusTarget: action.target }
+    case 'triggerThreatsRefresh':
+      return { ...state, threatsRefreshSeq: state.threatsRefreshSeq + 1 }
     case 'playing':
       return { ...state, playing: action.on }
     case 'settings':

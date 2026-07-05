@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Panel, SectionHeader, Toggle } from '../design/components';
 import { useAppState, useAppDispatch } from '../state/AppState';
 import { LAYER_DEFS } from '../layers/registry';
+import SitrepCard from '../panels/SitrepCard';
 import ThreatsPanel from '../panels/ThreatsPanel';
 import styles from './LeftRail.module.css';
 
@@ -71,6 +72,7 @@ function LayersPanel() {
 export default function LeftRail() {
   return (
     <aside className={styles.rail}>
+      <SitrepCard />
       <div className={styles.threatsWrap}>
         <ThreatsPanel />
       </div>
