@@ -218,11 +218,6 @@ function applyWindowPaint(map: maplibregl.Map, window: TimeWindow): void {
     12, ['case', gfwIn, 4.5, 3],
   ])
   set(gfw, 'circle-opacity', ['case', gfwIn, 0.8, 0.35])
-  const evIn = inWindow('date_ms', s, e)
-  const ev = sourceId('events')
-  set(ev, 'circle-color', ['case', evIn, COLORS.warn, COLORS.dim])
-  set(ev, 'circle-radius', ['case', evIn, 5, 3])
-  set(ev, 'circle-opacity', ['case', evIn, 0.9, 0.45])
   const alIn = inWindow('gen_ms', s, e)
   set(`${sourceId('alerts_geo')}-core`, 'circle-color', ['case', alIn, COLORS.crit, COLORS.dim])
   set(`${sourceId('alerts_geo')}-core`, 'circle-radius', ['case', alIn, 5, 3])
@@ -308,6 +303,8 @@ function addLayerStyle(map: maplibregl.Map, def: LayerDef): void {
       })
       break
     case 'events':
+      // Curated incidents stay yellow regardless of the time window — they are
+      // distinct from the gray GFW history, not window-dimmed context.
       map.addLayer({
         id: src,
         type: 'circle',
