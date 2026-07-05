@@ -50,6 +50,10 @@ def alert_object(row: dict) -> dict:
         "score": float(row["score"]) if row.get("score") is not None else None,
         "method_version": row.get("method_version"),
         "title_en": row.get("title_en"),
+        "why": list(row.get("why") or []),
+        "title_ko": row.get("title_ko"),
+        "summary_ko": row.get("summary_ko"),
+        "dedupe_key": row.get("dedupe_key"),
     }
 
 

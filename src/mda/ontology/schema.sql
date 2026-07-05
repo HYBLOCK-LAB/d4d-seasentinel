@@ -135,6 +135,17 @@ create table if not exists alert (
 );
 create index if not exists alert_generated_idx on alert (generated_at);
 create index if not exists alert_vessel_idx on alert (vessel_id);
+alter table alert add column if not exists summary_ko text;
+alter table alert add column if not exists dedupe_key text;
+create unique index if not exists alert_dedupe_key_idx on alert (dedupe_key) where dedupe_key is not null;
+
+create table if not exists threat_score_history (
+    dedupe_key text not null,
+    ts timestamptz not null,
+    score real,
+    level text,
+    primary key (dedupe_key, ts)
+);
 
 create table if not exists alert_timeline_step (
     alert_id text not null references alert (alert_id) on delete cascade,

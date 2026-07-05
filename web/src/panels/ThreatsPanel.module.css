@@ -59,10 +59,71 @@
   flex: 0 0 auto;
 }
 
+.sparkline {
+  width: 48px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
 .meta {
   font-size: var(--fs-micro);
   color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.selectedBody {
+  padding: 0 var(--sp-3) var(--sp-2);
+  background: var(--bg-0);
+}
+
+.summary {
+  margin: 0;
+  padding: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-normal);
+  color: var(--text-2);
+}
+
+.explainRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+}
+
+.explainButton {
+  height: 20px;
+  padding: 0 var(--sp-2);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+}
+
+.explainButton:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.explainButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.explainError {
+  font-size: var(--fs-micro);
+  color: var(--warn);
 }

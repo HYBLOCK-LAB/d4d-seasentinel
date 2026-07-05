@@ -24,6 +24,34 @@ def test_index_daily_composite_key():
     assert obj["index_value"] == 78.2
 
 
+def test_alert_object_maps_optional_dashboard_fields():
+    obj = fm.alert_object(
+        {
+            "alert_id": "a1",
+            "alert_type": "dark_vessel",
+            "level": "MED",
+            "generated_at": datetime(2026, 7, 4, 1, 2, 3, tzinfo=timezone.utc),
+            "score": 75.5,
+            "why": ("AIS_GAP", "ZONE_ENTRY"),
+            "title_ko": "제목",
+            "summary_ko": "요약",
+            "dedupe_key": "dark:v1",
+        }
+    )
+    assert obj["why"] == ["AIS_GAP", "ZONE_ENTRY"]
+    assert obj["title_ko"] == "제목"
+    assert obj["summary_ko"] == "요약"
+    assert obj["dedupe_key"] == "dark:v1"
+
+
+def test_alert_object_tolerates_missing_optional_dashboard_fields():
+    obj = fm.alert_object({"alert_id": "a1", "generated_at": None})
+    assert obj["why"] == []
+    assert obj["title_ko"] is None
+    assert obj["summary_ko"] is None
+    assert obj["dedupe_key"] is None
+
+
 def test_client_dry_run_without_credentials():
     client = FoundryClient()
     client.host, client.token = None, None

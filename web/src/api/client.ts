@@ -1,4 +1,5 @@
 import type {
+  Changes,
   FeatureCollection,
   LayerId,
   Meta,
@@ -22,6 +23,12 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   return res.json() as Promise<T>
 }
 
+async function post<T>(path: string): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: 'POST' })
+  if (!res.ok) throw new Error(`${path} ${res.status}`)
+  return res.json() as Promise<T>
+}
+
 export interface WindowParams {
   region: string
   start: string
@@ -30,9 +37,13 @@ export interface WindowParams {
 
 export const api = {
   meta: () => get<Meta>('/meta'),
+  changes: (region: string) => get<Changes>('/changes', { region }),
   threats: (p: WindowParams) => get<{ threats: Threat[] }>('/threats', { ...p }),
+  explain: (id: string) =>
+    post<{ summary_ko?: string | null }>(`/threats/${encodeURIComponent(id)}/explain`),
   evidence: (id: string) => get<ThreatEvidence>(`/threats/${encodeURIComponent(id)}/evidence`),
-  layer: (id: LayerId, p: WindowParams) => get<FeatureCollection>(`/layers/${id}`, { ...p }),
+  layer: (id: LayerId, p: WindowParams) =>
+    get<FeatureCollection>(`/layers/${id}`, { ...p, track_minutes: id === 'tracks' ? 60 : undefined }),
   timeline: (p: WindowParams, bucket: 'hour' | 'day') =>
     get<{ buckets: TimelineBucket[] }>('/timeline', { ...p, bucket }),
   ontologyTables: () => get<OntologyTable[]>('/ontology/tables'),

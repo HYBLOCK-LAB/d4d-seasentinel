@@ -2,18 +2,23 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 import xml.etree.ElementTree as ET
 
 import httpx
+import yaml
 
-from mda.config import load_incidents
+from mda.config import load_incidents, load_regions
+from mda.paths import config_path, data_dir
 from mda.store import pg
+from mda.store.cache import get_or_fetch
 
 OFAC_SDN = "https://www.treasury.gov/ofac/downloads/sdn.csv"
 UN_CONSOLIDATED = "https://scsanctions.un.org/resources/xml/en/consolidated.xml"
 WPI_QUERY = "https://services1.arcgis.com/VwarAUbcaX64Jhub/arcgis/rest/services/World_Port_Index/FeatureServer/0/query"
 CABLES_GEOJSON = "https://www.submarinecablemap.com/api/v3/cable/cable-geo.json"
+VLIZ_WFS = "https://geo.vliz.be/geoserver/MarineRegions/wfs"
 
 _IMO_RE = re.compile(r"IMO\s*(?:number:?\s*)?(\d{7})", re.IGNORECASE)
 
@@ -186,6 +191,44 @@ def _multiline_ewkt(geometry: dict) -> str | None:
     return f"SRID=4326;MULTILINESTRING({lines})" if lines else None
 
 
+def _ring_text(ring: list[list[float]]) -> str:
+    return ", ".join(f"{p[0]} {p[1]}" for p in ring)
+
+
+def _polygon_ewkt(geometry: dict) -> str | None:
+    gtype = geometry.get("type")
+    coords = geometry.get("coordinates")
+    if not coords:
+        return None
+    if gtype == "Polygon":
+        polygons = [coords]
+    elif gtype == "MultiPolygon":
+        polygons = coords
+    else:
+        return None
+    poly_text = []
+    for polygon in polygons:
+        rings = [f"({_ring_text(ring)})" for ring in polygon if ring]
+        if rings:
+            poly_text.append(f"({', '.join(rings)})")
+    return f"SRID=4326;MULTIPOLYGON({', '.join(poly_text)})" if poly_text else None
+
+
+def _bbox_ewkt(points: list[list[float]]) -> str:
+    ring = points if points[0] == points[-1] else [*points, points[0]]
+    return f"SRID=4326;POLYGON(({_ring_text(ring)}))"
+
+
+def _region_for_point(lon: float | None, lat: float | None) -> str | None:
+    if lon is None or lat is None:
+        return None
+    for region in load_regions():
+        min_lon, min_lat, max_lon, max_lat = region.bbox
+        if min_lon <= lon <= max_lon and min_lat <= lat <= max_lat:
+            return region.region_id
+    return None
+
+
 def collect_cables() -> dict:
     payload = _get(CABLES_GEOJSON).json()
     rows = {}
@@ -210,6 +253,100 @@ def collect_cables() -> dict:
     with pg.connect() as conn:
         pg.upsert(conn, "zone", list(rows.values()), conflict=["zone_id"], update=["name", "kind", "geom"])
     return {"cables": len(rows)}
+
+
+def _fetch_vliz_eez() -> dict:
+    resp = _get(
+        VLIZ_WFS,
+        {
+            "service": "WFS",
+            "version": "1.0.0",
+            "request": "GetFeature",
+            "typeName": "eez",
+            "outputFormat": "application/json",
+            "CQL_FILTER": "iso_ter1 IN ('KOR','CHN','PRK')",
+        },
+    )
+    if "json" not in resp.headers.get("content-type", ""):
+        raise RuntimeError(f"VLIZ WFS returned {resp.headers.get('content-type')}")
+    return resp.json()
+
+
+def collect_marine_eez() -> dict:
+    try:
+        payload = get_or_fetch(data_dir("raw", "reference", "marine_regions_eez_kor_chn_prk.json"), _fetch_vliz_eez)
+    except Exception as exc:
+        return {"marine_eez": f"skipped: {type(exc).__name__}: {exc}"}
+    rows = {}
+    for feat in payload.get("features", []):
+        props = feat.get("properties") or {}
+        ewkt = _polygon_ewkt(feat.get("geometry") or {})
+        mrgid = props.get("mrgid") or props.get("mrgid_eez")
+        if not ewkt or not mrgid:
+            continue
+        zone_id = f"eez:{mrgid}"
+        rows[zone_id] = {
+            "zone_id": zone_id,
+            "name": props.get("geoname") or props.get("territory1"),
+            "kind": "eez",
+            "role": props.get("iso_ter1"),
+            "region_id": _region_for_point(props.get("x_1"), props.get("y_1")),
+            "geom": ewkt,
+            "source_id": "marine_regions",
+            "collector": "reference_marine_eez",
+            "raw_ref": json.dumps(
+                {
+                    "mrgid": mrgid,
+                    "attribution": "Marine Regions EEZ v12 (CC BY)",
+                    "source": VLIZ_WFS,
+                },
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ),
+        }
+    with pg.connect() as conn:
+        pg.upsert(conn, "zone", list(rows.values()), conflict=["zone_id"], update=["name", "kind", "role", "region_id", "geom", "raw_ref"])
+    return {"marine_eez": len(rows)}
+
+
+def collect_gray_zones() -> dict:
+    path = config_path("gray_zones.yaml")
+    items = yaml.safe_load(path.read_text()) or []
+    rows = []
+    for item in items:
+        rows.append(
+            {
+                "zone_id": item["zone_id"],
+                "name": item["name"],
+                "kind": "gray_zone",
+                "role": "approximate" if item.get("approximate") else None,
+                "region_id": item.get("region_id"),
+                "geom": _bbox_ewkt(item["polygon"]),
+                "source_id": "config",
+                "collector": "reference_gray_zones",
+                "raw_ref": json.dumps(
+                    {
+                        "source": item.get("source"),
+                        "source_url": item.get("source_url"),
+                        "approximate": bool(item.get("approximate")),
+                        "notes": item.get("notes"),
+                        "config": "config/gray_zones.yaml",
+                    },
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                ),
+            }
+        )
+    with pg.connect() as conn:
+        pg.upsert(conn, "zone", rows, conflict=["zone_id"], update=["name", "kind", "role", "region_id", "geom", "raw_ref"])
+    return {"gray_zones": len(rows)}
+
+
+def collect_marine_zones() -> dict:
+    result = {}
+    result.update(collect_marine_eez())
+    result.update(collect_gray_zones())
+    return result
 
 
 def collect_incidents() -> dict:
@@ -244,7 +381,7 @@ def collect_incidents() -> dict:
 
 def collect_all() -> dict:
     result = {}
-    for fn in (collect_incidents, collect_ofac, collect_un1718, collect_wpi, collect_cables):
+    for fn in (collect_incidents, collect_ofac, collect_un1718, collect_wpi, collect_cables, collect_marine_zones):
         try:
             result.update(fn())
         except Exception as exc:

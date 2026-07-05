@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 from mda.config import load_regions
 from mda.paths import repo_root
 from mda.store import lake, pg
+from mda.store.retention import run_retention
 
 URL = "wss://stream.aisstream.io/v0/stream"
 POSITION_TYPES = {"PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport"}
@@ -20,6 +22,8 @@ DEFAULT_TYPES = ["PositionReport", "ShipStaticData", "StandardClassBPositionRepo
 FLUSH_EVERY = 400
 FLUSH_INTERVAL = 5.0
 BACKOFF_CAP = 30.0
+RETENTION_INTERVAL = 24 * 60 * 60
+LOG = logging.getLogger(__name__)
 
 _env_loaded = False
 
@@ -132,9 +136,9 @@ def _minimal_vessels(positions: list[dict]) -> list[dict]:
     return list(seen.values())
 
 
-def _flush(positions: list[dict], vessels: dict[str, dict]) -> None:
+def _flush(positions: list[dict], vessels: dict[str, dict]) -> int:
     if not positions and not vessels:
-        return
+        return 0
     with pg.connect() as conn:
         if positions:
             pg.upsert(conn, "vessel", _minimal_vessels(positions), conflict=["vessel_id"])
@@ -148,6 +152,20 @@ def _flush(positions: list[dict], vessels: dict[str, dict]) -> None:
             )
         if positions:
             pg.upsert(conn, "ais_position", positions, conflict=["mmsi", "ts"])
+    return len(positions)
+
+
+def _log_flush(region_ids: list[str], stats: dict, stored: int) -> None:
+    stats["stored_positions"] += stored
+    regions = ",".join(f"{rid}:{stats['regions'].get(rid, 0)}" for rid in region_ids)
+    LOG.info(
+        "ais flush regions=%s received=%s stored_positions=%s batch_stored=%s per_region=%s",
+        ",".join(region_ids),
+        stats["messages"],
+        stats["stored_positions"],
+        stored,
+        regions,
+    )
 
 
 def _record_gap(started_at: datetime, region_ids: list[str]) -> None:
@@ -169,6 +187,16 @@ def _record_gap(started_at: datetime, region_ids: list[str]) -> None:
         )
 
 
+async def _retention_loop() -> None:
+    while True:
+        await asyncio.sleep(RETENTION_INTERVAL)
+        try:
+            report = await asyncio.to_thread(run_retention)
+            LOG.info("ais retention complete %s", report)
+        except Exception:
+            LOG.exception("ais retention failed")
+
+
 async def run(region_ids: list[str], duration: float | None = None, to_lake: bool = False) -> dict:
     boxes, lookup = _boxes(region_ids)
     subscribe = {
@@ -177,58 +205,71 @@ async def run(region_ids: list[str], duration: float | None = None, to_lake: boo
         "FilterMessageTypes": DEFAULT_TYPES,
     }
     deadline = time.monotonic() + duration if duration else None
-    stats = {"positions": 0, "vessels": 0, "reconnects": 0}
+    stats = {"messages": 0, "positions": 0, "vessels": 0, "stored_positions": 0, "reconnects": 0, "regions": {}}
     backoff = 1.0
     gap_started: datetime | None = None
+    retention_task = asyncio.create_task(_retention_loop())
 
-    while deadline is None or time.monotonic() < deadline:
+    try:
+        while deadline is None or time.monotonic() < deadline:
+            try:
+                async with websockets.connect(URL, ping_interval=20, max_size=None) as ws:
+                    await ws.send(json.dumps(subscribe))
+                    if gap_started is not None:
+                        _record_gap(gap_started, region_ids)
+                        gap_started = None
+                    backoff = 1.0
+                    positions: list[dict] = []
+                    vessels: dict[str, dict] = {}
+                    last_flush = time.monotonic()
+                    seen: set[tuple[int, str]] = set()
+                    while deadline is None or time.monotonic() < deadline:
+                        timeout = None if deadline is None else max(0.1, deadline - time.monotonic())
+                        raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                        stats["messages"] += 1
+                        msg = json.loads(raw)
+                        msg_type = msg.get("MessageType")
+                        if msg_type in POSITION_TYPES:
+                            row = _position_row(msg, msg_type, lookup)
+                            if row:
+                                key = (row["mmsi"], row["ts"].isoformat())
+                                if key not in seen:
+                                    seen.add(key)
+                                    positions.append(row)
+                                    stats["positions"] += 1
+                                    rid = row["region_id"] or "unknown"
+                                    stats["regions"][rid] = stats["regions"].get(rid, 0) + 1
+                        elif msg_type in STATIC_TYPES:
+                            row = _vessel_row(msg, msg_type)
+                            if row:
+                                vessels[row["vessel_id"]] = row
+                                stats["vessels"] += 1
+                        if len(positions) >= FLUSH_EVERY or (time.monotonic() - last_flush) >= FLUSH_INTERVAL:
+                            if to_lake and positions:
+                                lake.write_batch("ais_realtime", positions)
+                            stored = _flush(positions, vessels)
+                            _log_flush(region_ids, stats, stored)
+                            positions, vessels, seen = [], {}, set()
+                            last_flush = time.monotonic()
+                    if to_lake and positions:
+                        lake.write_batch("ais_realtime", positions)
+                    stored = _flush(positions, vessels)
+                    _log_flush(region_ids, stats, stored)
+            except asyncio.TimeoutError:
+                break
+            except (websockets.ConnectionClosed, OSError, json.JSONDecodeError):
+                stats["reconnects"] += 1
+                if gap_started is None:
+                    gap_started = datetime.now(timezone.utc)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, BACKOFF_CAP)
+        return stats
+    finally:
+        retention_task.cancel()
         try:
-            async with websockets.connect(URL, ping_interval=20, max_size=None) as ws:
-                await ws.send(json.dumps(subscribe))
-                if gap_started is not None:
-                    _record_gap(gap_started, region_ids)
-                    gap_started = None
-                backoff = 1.0
-                positions: list[dict] = []
-                vessels: dict[str, dict] = {}
-                last_flush = time.monotonic()
-                seen: set[tuple[int, str]] = set()
-                while deadline is None or time.monotonic() < deadline:
-                    timeout = None if deadline is None else max(0.1, deadline - time.monotonic())
-                    raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
-                    msg = json.loads(raw)
-                    msg_type = msg.get("MessageType")
-                    if msg_type in POSITION_TYPES:
-                        row = _position_row(msg, msg_type, lookup)
-                        if row:
-                            key = (row["mmsi"], row["ts"].isoformat())
-                            if key not in seen:
-                                seen.add(key)
-                                positions.append(row)
-                                stats["positions"] += 1
-                    elif msg_type in STATIC_TYPES:
-                        row = _vessel_row(msg, msg_type)
-                        if row:
-                            vessels[row["vessel_id"]] = row
-                            stats["vessels"] += 1
-                    if len(positions) >= FLUSH_EVERY or (time.monotonic() - last_flush) >= FLUSH_INTERVAL:
-                        if to_lake and positions:
-                            lake.write_batch("ais_realtime", positions)
-                        _flush(positions, vessels)
-                        positions, vessels, seen = [], {}, set()
-                        last_flush = time.monotonic()
-                if to_lake and positions:
-                    lake.write_batch("ais_realtime", positions)
-                _flush(positions, vessels)
-        except asyncio.TimeoutError:
-            break
-        except (websockets.ConnectionClosed, OSError, json.JSONDecodeError):
-            stats["reconnects"] += 1
-            if gap_started is None:
-                gap_started = datetime.now(timezone.utc)
-            await asyncio.sleep(backoff)
-            backoff = min(backoff * 2, BACKOFF_CAP)
-    return stats
+            await retention_task
+        except asyncio.CancelledError:
+            pass
 
 
 def run_sync(region_ids: list[str], duration: float | None = None, to_lake: bool = False) -> dict:

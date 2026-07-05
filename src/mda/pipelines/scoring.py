@@ -1,46 +1,21 @@
+from __future__ import annotations
+
 import hashlib
 import json
-from datetime import datetime, timezone
+from collections import defaultdict
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 
-from mda.config import load_scoring_config
+import psycopg
+
+from mda.config import ScoringConfig, load_scoring_config
 from mda.paths import config_path
+from mda.pipelines.detectors import REGISTRY
+from mda.pipelines.detectors.core import Detection, effective_gap_hours
 from mda.store import pg
 
-METHOD = "scoring.v1"
-
-GAP_SQL = """
-with ordered as (
-    select vessel_id, ts, region_id,
-        lag(ts) over (partition by vessel_id order by ts) as prev_ts,
-        lag(geom) over (partition by vessel_id order by ts) as prev_geom,
-        geom
-    from ais_position
-    where vessel_id is not null
-)
-select vessel_id, prev_ts, ts, region_id,
-    extract(epoch from (ts - prev_ts)) / 3600.0 as gap_hours,
-    ST_Y(prev_geom) as lat, ST_X(prev_geom) as lon
-from ordered
-where prev_ts is not null and ts - prev_ts > (%s * interval '1 hour')
-"""
-
-CABLE_SQL = """
-select p.vessel_id, z.zone_id, z.name,
-    min(ST_Distance(p.geom::geography, z.geom::geography)) as dist_m,
-    min(p.ts) as first_ts
-from ais_position p
-join zone z on z.kind = 'cable'
-where ST_DWithin(p.geom::geography, z.geom::geography, %s)
-group by p.vessel_id, z.zone_id, z.name
-"""
-
-SANCTIONED_SQL = """
-select distinct a.vessel_id, s.vessel_id as sanction_row_id, s.name, s.source_id
-from ais_position a
-join vessel av on av.vessel_id = a.vessel_id
-join vessel s on s.imo = av.imo and s.source_id in ('ofac_sdn', 'un1718')
-where av.imo is not null
-"""
+METHOD = "scoring.v2"
+DEFAULT_WINDOW_HOURS = 72.0
 
 
 def clip_score(x: float) -> float:
@@ -55,18 +30,6 @@ def level_for(score: float, thresholds: dict) -> str:
     return "MED"
 
 
-def effective_gap_hours(gap_start: datetime, gap_end: datetime, outages: list[tuple[datetime, datetime | None]]) -> float:
-    raw = (gap_end - gap_start).total_seconds() / 3600.0
-    overlap_total = 0.0
-    for started_at, ended_at in outages:
-        outage_end = ended_at if ended_at is not None else gap_end
-        overlap_start = max(gap_start, started_at)
-        overlap_end = min(gap_end, outage_end)
-        if overlap_end > overlap_start:
-            overlap_total += (overlap_end - overlap_start).total_seconds() / 3600.0
-    return max(0.0, raw - overlap_total)
-
-
 def assemble(alert_base: dict, evidence: list[dict], thresholds: dict) -> dict:
     for e in evidence:
         e["method_version"] = METHOD
@@ -77,302 +40,353 @@ def assemble(alert_base: dict, evidence: list[dict], thresholds: dict) -> dict:
     return alert
 
 
-def _alert(alert_id, alert_type, vessel_id, zone_id, region_id, title_ko, title_en, why) -> dict:
-    return {
-        "alert_id": alert_id,
-        "alert_type": alert_type,
-        "vessel_id": vessel_id,
-        "zone_id": zone_id,
-        "region_id": region_id,
-        "generated_at": datetime.now(timezone.utc),
-        "method_version": METHOD,
-        "score": None,
-        "level": None,
-        "title_ko": title_ko,
-        "title_en": title_en,
-        "why": why,
-        "source_id": "scoring",
-        "collector": "scoring_pipeline",
-        "raw_ref": None,
-    }
+def detector_params(raw: dict) -> dict:
+    return {k: v for k, v in raw.items() if k not in {"enabled", "weight"}}
 
 
-def detect_ais_gap(conn, params: dict) -> list[dict]:
-    with conn.cursor() as cur:
-        cur.execute(GAP_SQL, (params["min_gap_hours"],))
-        gap_rows = cur.fetchall()
-        cur.execute(
-            "select started_at, ended_at from collector_gap where source_id = 'aisstream' order by started_at"
-        )
-        outages = [(row[0], row[1]) for row in cur.fetchall()]
-
-    threats = []
-    for vessel_id, prev_ts, ts, region_id, gap_hours, lat, lon in gap_rows:
-        eff = effective_gap_hours(prev_ts, ts, outages)
-        if eff < params["min_gap_hours"]:
-            continue
-        coverage_ok = eff >= float(gap_hours) - 1e-9
-        why = ["AIS_GAP"]
-        evidence = [
-            {
-                "term_name": "AIS_GAP",
-                "points": params["points_base"] + params["points_per_hour"] * eff,
-                "src_table": "ais_position",
-                "src_id": f"{vessel_id}:{prev_ts.isoformat()}",
-                "detail": f"AIS gap {eff:.1f}h effective (raw {gap_hours:.1f}h)",
-            }
-        ]
-        if coverage_ok:
-            why.append("COVERAGE_OK")
-            evidence.append(
-                {
-                    "term_name": "COVERAGE_OK",
-                    "points": params["coverage_bonus"],
-                    "src_table": "collector_gap",
-                    "src_id": "no_outage_overlap",
-                    "detail": "receiver coverage confirmed during gap",
-                }
-            )
-        alert = _alert(
-            alert_id=f"gap:{vessel_id}:{prev_ts.isoformat()}",
-            alert_type="dark_vessel",
-            vessel_id=vessel_id,
-            zone_id=None,
-            region_id=region_id,
-            title_ko=f"AIS 공백 {eff:.1f}시간 — 다크베슬 의심",
-            title_en=f"AIS gap {eff:.1f}h — possible dark vessel",
-            why=why,
-        )
-        threats.append({"alert": alert, "evidence": evidence, "links": []})
-    return threats
+def detector_weight(raw: dict) -> float:
+    return float(raw.get("weight", 1.0))
 
 
-def detect_cable_proximity(conn, params: dict) -> list[dict]:
-    with conn.cursor() as cur:
-        cur.execute(CABLE_SQL, (params["max_km"] * 1000,))
-        cable_rows = cur.fetchall()
+def enabled_detector_names(cfg: ScoringConfig) -> list[str]:
+    return [
+        name
+        for name, params in cfg.detectors.items()
+        if params.get("enabled", True) and name in REGISTRY
+    ]
 
-    threats = []
-    for vessel_id, zone_id, name, dist_m, first_ts in cable_rows:
-        dist_km = dist_m / 1000.0
-        why = ["CABLE_PROXIMITY"]
-        evidence = [
-            {
-                "term_name": "CABLE_PROXIMITY",
-                "points": params["points_base"] + params["points_per_km_inside"] * (params["max_km"] - dist_km),
-                "src_table": "zone",
-                "src_id": zone_id,
-                "detail": f"{name} within {dist_km:.2f}km",
-            }
-        ]
+
+def make_dedupe_key(alert_type: str, subject_id: str) -> str:
+    return f"{alert_type}:{subject_id}"
+
+
+def alert_type_for_subject(subject_type: str) -> str:
+    if subject_type == "zone":
+        return "zone_threat"
+    return "vessel_threat"
+
+
+def score_detections(detections: list[Detection], thresholds: dict) -> tuple[float, str]:
+    score = clip_score(sum(d.points for d in detections))
+    return score, level_for(score, thresholds)
+
+
+def _window() -> tuple[datetime, datetime]:
+    end = datetime.now(timezone.utc)
+    return end - timedelta(hours=DEFAULT_WINDOW_HOURS), end
+
+
+def _apply_overrides(name: str, params: dict, min_gap_hours: float | None, cable_km: float | None) -> dict:
+    params = dict(params)
+    if name == "ais_gap" and min_gap_hours is not None:
+        params["min_gap_hours"] = min_gap_hours
+    if name == "cable_proximity" and cable_km is not None:
+        params["max_km"] = cable_km
+    return params
+
+
+def _weighted(detections: list[Detection], weight: float) -> list[Detection]:
+    return [replace(d, points=d.points * weight) for d in detections]
+
+
+def _subject_region(conn: psycopg.Connection, subject_type: str, subject_id: str) -> str | None:
+    try:
         with conn.cursor() as cur:
-            cur.execute(
-                "select count(*), min(p.ts), max(p.ts) from ais_position p "
-                "join zone z on z.zone_id = %s "
-                "where p.vessel_id = %s and p.sog is not null and p.sog < %s "
-                "and ST_DWithin(p.geom::geography, z.geom::geography, %s)",
-                (zone_id, vessel_id, params["loiter_sog_kn"], params["max_km"] * 1000),
-            )
-            count, min_ts, max_ts = cur.fetchone()
-        if count is not None and count >= 3:
-            span_h = (max_ts - min_ts).total_seconds() / 3600.0
-            if span_h >= params["loiter_min_hours"]:
-                why.append("LOITERING")
-                evidence.append(
-                    {
-                        "term_name": "LOITERING",
-                        "points": params["loiter_points"],
-                        "src_table": "ais_position",
-                        "src_id": f"{vessel_id}:loiter",
-                        "detail": f"SOG<{params['loiter_sog_kn']}kn for {span_h:.1f}h",
-                    }
+            if subject_type == "zone":
+                cur.execute("select region_id from zone where zone_id = %s", (subject_id,))
+            else:
+                cur.execute(
+                    "select region_id from ais_position where vessel_id = %s "
+                    "order by ts desc limit 1",
+                    (subject_id,),
                 )
-        alert = _alert(
-            alert_id=f"cable:{vessel_id}:{zone_id}",
-            alert_type="zone_intrusion",
-            vessel_id=vessel_id,
-            zone_id=zone_id,
-            region_id=None,
-            title_ko=f"해저케이블 {name} {dist_km:.1f}km 근접",
-            title_en=f"Subsea cable {name} proximity {dist_km:.1f}km",
-            why=why,
+            row = cur.fetchone()
+    except psycopg.Error:
+        conn.rollback()
+        return None
+    return row[0] if row else None
+
+
+def _titles(subject_type: str, subject_id: str, detections: list[Detection], score: float) -> tuple[str, str]:
+    top_terms = [d.term for d in sorted(detections, key=lambda d: d.points, reverse=True) if d.points > 0]
+    top = ", ".join(dict.fromkeys(top_terms[:3])) or "evidence mix"
+    if subject_type == "zone":
+        return (
+            f"{subject_id} 구역 위협 점수 {score:.0f} — {top}",
+            f"{subject_id} zone threat score {score:.0f} — {top}",
         )
-        link = {
-            "link_id": f"near:{vessel_id}:{zone_id}",
-            "src_type": "vessel",
-            "src_id": vessel_id,
-            "dst_type": "zone",
-            "dst_id": zone_id,
-            "rel_type": "near_cable",
-            "confidence": 1.0,
-            "hypothesis": False,
-            "method_version": METHOD,
-            "source_id": "scoring",
-            "collector": "scoring_pipeline",
-            "raw_ref": None,
+    return (
+        f"{subject_id} 선박 위협 점수 {score:.0f} — {top}",
+        f"{subject_id} vessel threat score {score:.0f} — {top}",
+    )
+
+
+def _evidence_signature(detections: list[Detection]) -> str:
+    payload = [
+        {
+            "term": d.term,
+            "points": round(float(d.points), 6),
+            "detail": d.detail,
+            "src_table": d.src_table,
+            "src_id": d.src_id,
         }
-        threats.append({"alert": alert, "evidence": evidence, "links": [link]})
-    return threats
+        for d in sorted(detections, key=lambda item: (item.term, item.src_table, item.src_id, item.detail))
+    ]
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return f"evidence_sha1:{hashlib.sha1(raw.encode()).hexdigest()[:16]}"
 
 
-def detect_sanctioned_match(conn, params: dict) -> list[dict]:
-    with conn.cursor() as cur:
-        cur.execute(SANCTIONED_SQL)
-        rows = cur.fetchall()
+def _alert_rows(
+    conn: psycopg.Connection,
+    grouped: dict[tuple[str, str], list[Detection]],
+    thresholds: dict,
+    generated_at: datetime,
+) -> tuple[list[dict], list[dict], list[dict], dict[str, int], dict[str, int]]:
+    alert_rows: list[dict] = []
+    evidence_rows: list[dict] = []
+    history_rows: list[dict] = []
+    by_type: dict[str, int] = {}
+    by_subject_type: dict[str, int] = {}
 
-    threats = []
-    for vessel_id, sanction_row_id, name, source_id in rows:
-        with conn.cursor() as cur:
-            cur.execute("select max(ts) from ais_position where vessel_id = %s", (vessel_id,))
-            ts = cur.fetchone()[0]
-        why = ["SANCTIONED_MATCH", "OBSERVED_PRESENCE"]
-        evidence = [
+    for (subject_type, subject_id), detections in grouped.items():
+        score, level = score_detections(detections, thresholds)
+        alert_type = alert_type_for_subject(subject_type)
+        dedupe_key = make_dedupe_key(alert_type, subject_id)
+        title_ko, title_en = _titles(subject_type, subject_id, detections, score)
+        region_id = _subject_region(conn, subject_type, subject_id)
+        terms = [d.term for d in sorted(detections, key=lambda d: d.points, reverse=True)]
+        why = list(dict.fromkeys(terms))
+        alert_id = f"{METHOD}:{subject_type}:{subject_id}"
+        alert_rows.append(
             {
-                "term_name": "SANCTIONED_MATCH",
-                "points": params["points_match"],
-                "src_table": "vessel",
-                "src_id": sanction_row_id,
-                "detail": f"IMO match to {source_id} entry {name}",
-            },
-            {
-                "term_name": "OBSERVED_PRESENCE",
-                "points": params["points_presence"],
-                "src_table": "ais_position",
-                "src_id": f"{vessel_id}:latest",
-                "detail": f"live AIS contact {ts.isoformat()}" if ts is not None else "live AIS contact unknown",
-            },
-        ]
-        alert = _alert(
-            alert_id=f"sanctioned:{vessel_id}",
-            alert_type="dark_vessel",
-            vessel_id=vessel_id,
-            zone_id=None,
-            region_id=None,
-            title_ko=f"제재 선박 실시간 포착 ({source_id})",
-            title_en=f"Sanctioned vessel live contact ({source_id})",
-            why=why,
+                "alert_id": alert_id,
+                "alert_type": alert_type,
+                "level": level,
+                "vessel_id": subject_id if subject_type == "vessel" else None,
+                "zone_id": subject_id if subject_type == "zone" else None,
+                "region_id": region_id,
+                "generated_at": generated_at,
+                "method_version": METHOD,
+                "score": score,
+                "title_ko": title_ko,
+                "title_en": title_en,
+                "why": why,
+                "summary_ko": None,
+                "dedupe_key": dedupe_key,
+                "source_id": "scoring",
+                "collector": "scoring_pipeline",
+                "raw_ref": _evidence_signature(detections),
+            }
         )
-        link = {
-            "link_id": f"sanctioned_as:{vessel_id}:{sanction_row_id}",
-            "src_type": "vessel",
-            "src_id": vessel_id,
-            "dst_type": "document",
-            "dst_id": sanction_row_id,
-            "rel_type": "sanctioned_as",
-            "confidence": 1.0,
-            "hypothesis": False,
-            "method_version": METHOD,
-            "source_id": "scoring",
-            "collector": "scoring_pipeline",
-            "raw_ref": None,
-        }
-        threats.append({"alert": alert, "evidence": evidence, "links": [link]})
-    return threats
-
-
-def apply_zone_boost(conn, threats: list[dict], params: dict) -> None:
-    vessel_ids = list({t["alert"]["vessel_id"] for t in threats if t["alert"]["vessel_id"] is not None})
-    if not vessel_ids:
-        return
-    with conn.cursor() as cur:
-        cur.execute(
-            "select distinct p.vessel_id from ais_position p "
-            "join zone z on z.kind = 'aoi' and ST_Contains(z.geom, p.geom) "
-            "where p.vessel_id = any(%s)",
-            (vessel_ids,),
-        )
-        hits = {row[0] for row in cur.fetchall()}
-    if not hits:
-        return
-    for t in threats:
-        if t["alert"]["vessel_id"] in hits:
-            t["evidence"].append(
+        for d in detections:
+            evidence_rows.append(
                 {
-                    "term_name": "ZONE_PRESENCE",
-                    "points": params["boost_points"],
-                    "src_table": "zone",
-                    "src_id": "aoi",
-                    "detail": "activity inside monitored AOI",
+                    "dedupe_key": dedupe_key,
+                    "term_name": d.term,
+                    "points": d.points,
+                    "src_table": d.src_table,
+                    "src_id": d.src_id,
+                    "detail": d.detail,
+                    "method_version": METHOD,
                 }
             )
-            t["alert"]["why"].append("ZONE_PRESENCE")
+        history_rows.append({"dedupe_key": dedupe_key, "ts": generated_at, "score": score, "level": level})
+        by_type[alert_type] = by_type.get(alert_type, 0) + 1
+        by_subject_type[subject_type] = by_subject_type.get(subject_type, 0) + 1
+
+    return alert_rows, evidence_rows, history_rows, by_type, by_subject_type
 
 
-def run_scoring(min_gap_hours: float | None = None, cable_km: float | None = None) -> dict:
+def _upsert_alerts(conn: psycopg.Connection, alert_rows: list[dict]) -> dict[str, str]:
+    if not alert_rows:
+        return {}
+    statement = """
+        insert into alert (
+            alert_id, alert_type, level, vessel_id, zone_id, region_id, generated_at,
+            method_version, score, title_ko, title_en, why, summary_ko, dedupe_key,
+            source_id, collector, raw_ref
+        ) values (
+            %(alert_id)s, %(alert_type)s, %(level)s, %(vessel_id)s, %(zone_id)s, %(region_id)s,
+            %(generated_at)s, %(method_version)s, %(score)s, %(title_ko)s, %(title_en)s,
+            %(why)s, %(summary_ko)s, %(dedupe_key)s, %(source_id)s, %(collector)s, %(raw_ref)s
+        )
+        on conflict (dedupe_key) where dedupe_key is not null do update set
+            alert_type = excluded.alert_type,
+            level = excluded.level,
+            vessel_id = excluded.vessel_id,
+            zone_id = excluded.zone_id,
+            region_id = excluded.region_id,
+            generated_at = excluded.generated_at,
+            method_version = excluded.method_version,
+            score = excluded.score,
+            title_ko = excluded.title_ko,
+            title_en = excluded.title_en,
+            why = excluded.why,
+            summary_ko = case
+                when alert.raw_ref is distinct from excluded.raw_ref then null
+                else alert.summary_ko
+            end,
+            source_id = excluded.source_id,
+            collector = excluded.collector,
+            raw_ref = excluded.raw_ref
+        returning alert_id, dedupe_key
+    """
+    alert_ids: dict[str, str] = {}
+    with conn.cursor() as cur:
+        for row in alert_rows:
+            cur.execute(statement, row)
+            alert_id, dedupe_key = cur.fetchone()
+            alert_ids[dedupe_key] = alert_id
+    return alert_ids
+
+
+def _replace_evidence(conn: psycopg.Connection, evidence_rows: list[dict], alert_ids: dict[str, str]) -> int:
+    if not alert_ids:
+        return 0
+    actual_alert_ids = list(alert_ids.values())
+    with conn.cursor() as cur:
+        cur.execute("delete from alert_evidence where alert_id = any(%s)", (actual_alert_ids,))
+        rows = []
+        for row in evidence_rows:
+            alert_id = alert_ids.get(row.pop("dedupe_key"))
+            if alert_id is None:
+                continue
+            rows.append({"alert_id": alert_id, **row})
+        if rows:
+            cur.executemany(
+                "insert into alert_evidence "
+                "(alert_id, term_name, points, src_table, src_id, detail, method_version) "
+                "values (%(alert_id)s, %(term_name)s, %(points)s, %(src_table)s, %(src_id)s, %(detail)s, %(method_version)s)",
+                rows,
+            )
+    return len(evidence_rows)
+
+
+def _insert_history(conn: psycopg.Connection, rows: list[dict]) -> int:
+    if not rows:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(
+            "insert into threat_score_history (dedupe_key, ts, score, level) "
+            "values (%(dedupe_key)s, %(ts)s, %(score)s, %(level)s) "
+            "on conflict (dedupe_key, ts) do nothing",
+            rows,
+        )
+    return len(rows)
+
+
+def _upsert_method(conn: psycopg.Connection) -> None:
+    config_hash = hashlib.sha1(config_path("scoring.yaml").read_bytes()).hexdigest()[:16]
+    pg.upsert(
+        conn,
+        "method_registry",
+        [{"method_version": METHOD, "config_snapshot": json.dumps({"config_hash": config_hash})}],
+        conflict=["method_version"],
+        update=["config_snapshot"],
+    )
+
+
+def _run_detectors(
+    conn: psycopg.Connection,
+    cfg: ScoringConfig,
+    window: tuple[datetime, datetime],
+    min_gap_hours: float | None,
+    cable_km: float | None,
+) -> tuple[list[Detection], dict[str, int]]:
+    detections: list[Detection] = []
+    detector_counts: dict[str, int] = {}
+    for name in enabled_detector_names(cfg):
+        raw = cfg.detectors[name]
+        params = _apply_overrides(name, detector_params(raw), min_gap_hours, cable_km)
+        found = REGISTRY[name].func(conn, window, params)
+        weighted = _weighted(found, detector_weight(raw))
+        detections.extend(weighted)
+        detector_counts[name] = len(weighted)
+    return detections, detector_counts
+
+
+def run_scoring(
+    min_gap_hours: float | None = None,
+    cable_km: float | None = None,
+    explain: bool = False,
+    top: int = 20,
+) -> dict:
     cfg = load_scoring_config()
-
-    gap_params = dict(cfg.detectors["ais_gap"])
-    if min_gap_hours is not None:
-        gap_params["min_gap_hours"] = min_gap_hours
-
-    cable_params = dict(cfg.detectors["cable_proximity"])
-    if cable_km is not None:
-        cable_params["max_km"] = cable_km
-
-    sanctioned_params = dict(cfg.detectors["sanctioned_match"])
-    zone_params = dict(cfg.detectors["zone_activity"])
+    window = _window()
+    generated_at = datetime.now(timezone.utc)
 
     with pg.connect() as conn:
-        threats: list[dict] = []
-        threats.extend(detect_ais_gap(conn, gap_params))
-        threats.extend(detect_cable_proximity(conn, cable_params))
-        threats.extend(detect_sanctioned_match(conn, sanctioned_params))
-        apply_zone_boost(conn, threats, zone_params)
+        detections, detector_counts = _run_detectors(conn, cfg, window, min_gap_hours, cable_km)
+        grouped: dict[tuple[str, str], list[Detection]] = defaultdict(list)
+        for detection in detections:
+            grouped[(detection.subject_type, detection.subject_id)].append(detection)
 
-        alert_rows = []
-        evidence_rows = []
-        link_rows = []
-        by_type: dict[str, int] = {}
-
-        for t in threats:
-            alert = assemble(t["alert"], t["evidence"], cfg.thresholds)
-            alert_rows.append(alert)
-            for e in t["evidence"]:
-                e["alert_id"] = alert["alert_id"]
-                evidence_rows.append(e)
-            link_rows.extend(t["links"])
-            by_type[alert["alert_type"]] = by_type.get(alert["alert_type"], 0) + 1
-
-        config_hash = hashlib.sha1(config_path("scoring.yaml").read_bytes()).hexdigest()[:16]
-        pg.upsert(
-            conn,
-            "method_registry",
-            [{"method_version": METHOD, "config_snapshot": json.dumps({"config_hash": config_hash})}],
-            conflict=["method_version"],
-            update=["config_snapshot"],
+        alert_rows, evidence_rows, history_rows, by_type, by_subject_type = _alert_rows(
+            conn, grouped, cfg.thresholds, generated_at
         )
+        _upsert_method(conn)
+        alert_ids = _upsert_alerts(conn, alert_rows)
+        evidence_count = _replace_evidence(conn, evidence_rows, alert_ids)
+        history_count = _insert_history(conn, history_rows)
 
-        pg.upsert(
-            conn,
-            "alert",
-            alert_rows,
-            conflict=["alert_id"],
-            update=["score", "level", "generated_at", "why"],
-        )
-
-        alert_ids = [a["alert_id"] for a in alert_rows]
-        with conn.cursor() as cur:
-            if alert_ids:
-                cur.execute("delete from alert_evidence where alert_id = any(%s)", (alert_ids,))
-            if evidence_rows:
-                cur.executemany(
-                    "insert into alert_evidence "
-                    "(alert_id, term_name, points, src_table, src_id, detail, method_version) "
-                    "values (%(alert_id)s, %(term_name)s, %(points)s, %(src_table)s, %(src_id)s, %(detail)s, %(method_version)s)",
-                    evidence_rows,
-                )
-
-        pg.upsert(
-            conn,
-            "entity_link",
-            link_rows,
-            conflict=["link_id"],
-            update=["confidence"],
-        )
+        explain_result = explain_top_alerts(conn, top) if explain else {"explained": 0, "skipped_no_evidence": 0}
 
     return {
         "alerts": len(alert_rows),
-        "evidence": len(evidence_rows),
-        "links": len(link_rows),
+        "evidence": evidence_count,
+        "links": 0,
+        "history": history_count,
         "by_type": by_type,
+        "by_subject_type": by_subject_type,
+        "detectors": detector_counts,
+        "explained": explain_result,
     }
+
+
+def _evidence_for_explain(conn: psycopg.Connection, alert_id: str) -> list[dict]:
+    with conn.cursor() as cur:
+        cur.execute(
+            "select term_name, points, detail from alert_evidence "
+            "where alert_id = %s order by points desc",
+            (alert_id,),
+        )
+        return [
+            {"term": term, "points": points, "detail": detail}
+            for term, points, detail in cur.fetchall()
+        ]
+
+
+def explain_top_alerts(conn: psycopg.Connection, top: int = 20) -> dict:
+    from mda.llm_client import generate_threat_summary_ko
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "select alert_id, title_ko, title_en, level, score, why "
+            "from alert where method_version = %s and (summary_ko is null or summary_ko = '') "
+            "order by score desc nulls last limit %s",
+            (METHOD, top),
+        )
+        alerts = cur.fetchall()
+
+    explained = 0
+    skipped_no_evidence = 0
+    for alert_id, title_ko, title_en, level, score, why in alerts:
+        evidence = _evidence_for_explain(conn, alert_id)
+        if not evidence:
+            skipped_no_evidence += 1
+            continue
+        summary = generate_threat_summary_ko(
+            {
+                "id": alert_id,
+                "title_ko": title_ko,
+                "title_en": title_en,
+                "level": level,
+                "score": score,
+                "why": why,
+            },
+            evidence,
+        )
+        with conn.cursor() as cur:
+            cur.execute("update alert set summary_ko = %s where alert_id = %s", (summary, alert_id))
+        explained += 1
+    return {"explained": explained, "skipped_no_evidence": skipped_no_evidence}

@@ -1,5 +1,8 @@
+from contextlib import contextmanager
 from datetime import datetime
+from threading import Lock
 
+import psycopg
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 
@@ -11,6 +14,36 @@ app = FastAPI(title="SeaSentinel MDA API")
 app.include_router(llm.router, prefix="/api")
 app.include_router(assess.router, prefix="/api")
 app.include_router(sitrep.router, prefix="/api")
+
+_changes_conn: psycopg.Connection | None = None
+_changes_conn_lock = Lock()
+
+
+@contextmanager
+def _changes_connection():
+    global _changes_conn
+    with _changes_conn_lock:
+        try:
+            if _changes_conn is None or _changes_conn.closed:
+                _changes_conn = psycopg.connect(pg.dsn(), autocommit=False)
+                _changes_conn.read_only = True
+            yield _changes_conn
+            _changes_conn.commit()
+        except Exception:
+            if _changes_conn is not None and not _changes_conn.closed:
+                _changes_conn.rollback()
+                _changes_conn.close()
+            _changes_conn = None
+            raise
+
+
+@app.on_event("shutdown")
+def close_changes_connection() -> None:
+    global _changes_conn
+    with _changes_conn_lock:
+        if _changes_conn is not None and not _changes_conn.closed:
+            _changes_conn.close()
+        _changes_conn = None
 
 
 @app.get("/api/health")
@@ -29,6 +62,13 @@ def health() -> dict:
 def meta() -> dict:
     with pg.connect(readonly=True) as conn:
         return queries.get_meta(conn)
+
+
+@app.get("/api/changes")
+def changes(region: str = Query(...)) -> dict:
+    with _changes_connection() as conn:
+        resolved_region = queries.resolve_region(region)
+        return queries.get_changes(conn, resolved_region)
 
 
 @app.get("/api/threats")
@@ -55,12 +95,27 @@ def threat_evidence(threat_id: str) -> dict:
     return result
 
 
+@app.post("/api/threats/{threat_id}/explain")
+def threat_explain(threat_id: str) -> dict:
+    try:
+        with pg.connect() as conn:
+            result = queries.explain_threat(conn, threat_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="threat not found")
+    return result
+
+
 @app.get("/api/layers/{layer_id}")
 def layer(
     layer_id: str,
     region: str | None = None,
     start: datetime | None = None,
     end: datetime | None = None,
+    track_minutes: int = Query(60, ge=1),
 ) -> dict:
     handler = queries.LAYERS.get(layer_id)
     if handler is None:
@@ -71,6 +126,8 @@ def layer(
             default_start, default_end = queries.compute_window(conn)
             start = start or default_start
             end = end or default_end
+        if layer_id == "tracks":
+            return handler(conn, resolved_region, start, end, track_minutes)
         return handler(conn, resolved_region, start, end)
 
 

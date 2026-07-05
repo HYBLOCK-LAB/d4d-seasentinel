@@ -1,7 +1,7 @@
 - region_id: west_sea
   name: Korean West Sea (Yellow Sea)
   theatre: ROK west coast / NLL
-  bbox: [124.0, 34.5, 126.6, 38.6]
+  bbox: [117.0, 32.0, 126.8, 41.0]
   priority: primary
 - region_id: south_china_sea
   name: South China Sea

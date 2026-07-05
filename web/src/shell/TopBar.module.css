@@ -60,9 +60,26 @@
 
 .kpis {
   display: flex;
+  align-items: center;
   gap: var(--sp-4);
   padding-right: var(--sp-3);
   border-right: 1px solid var(--line);
+}
+
+.secondaryKpis {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.secondaryKpis b {
+  color: var(--text-1);
+  font-weight: 500;
+  margin-left: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .actions {

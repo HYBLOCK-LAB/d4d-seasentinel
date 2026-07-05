@@ -23,7 +23,12 @@ export default function EvidenceList({ threatId }: EvidenceListProps) {
     };
   }, [threatId]);
 
-  const total = (evidence ?? []).reduce((sum, e) => sum + e.points, 0);
+  const positiveTotal = (evidence ?? [])
+    .filter((item) => item.points > 0)
+    .reduce((sum, item) => sum + item.points, 0);
+  const negativeTotal = (evidence ?? [])
+    .filter((item) => item.points < 0)
+    .reduce((sum, item) => sum + item.points, 0);
 
   return (
     <div className={styles.wrap}>
@@ -42,8 +47,8 @@ export default function EvidenceList({ threatId }: EvidenceListProps) {
             }
           >
             <div className={styles.line1}>
-              <span className={styles.term}>{e.term}</span>
-              <span className={`mono ${styles.points}`}>
+              <span className={styles.term}>{e.term_ko || e.term}</span>
+              <span className={`mono ${styles.points} ${e.points >= 0 ? styles.pointsPositive : styles.pointsNegative}`}>
                 {e.points >= 0 ? '+' : ''}
                 {e.points.toFixed(1)}
               </span>
@@ -56,7 +61,10 @@ export default function EvidenceList({ threatId }: EvidenceListProps) {
           </div>
         ))}
       {evidence !== null && evidence.length > 0 && (
-        <div className={`mono ${styles.total}`}>{`Σ ${total.toFixed(1)}`}</div>
+        <div className={`mono ${styles.total}`}>
+          <span className={styles.pointsPositive}>{`Σ가점 +${positiveTotal.toFixed(1)}`}</span>
+          <span className={styles.pointsNegative}>{`Σ감점 ${negativeTotal.toFixed(1)}`}</span>
+        </div>
       )}
     </div>
   );

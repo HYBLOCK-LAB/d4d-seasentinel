@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from datetime import date
 
 from mda.config import load_aois, load_events, load_index_config
@@ -104,10 +105,33 @@ def _cmd_collect_reference(args) -> None:
     print(reference.collect_all())
 
 
+def _cmd_collect_gfw_events(args) -> None:
+    from mda.collectors import gfw_events
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    regions = [r.strip() for r in args.regions.split(",") if r.strip()]
+    kwargs = {"limit": args.limit} if args.limit else {}
+    print(gfw_events.collect(args.start, args.end, regions, **kwargs))
+
+
+def _cmd_retention(args) -> None:
+    from mda.store import retention
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    print(retention.run_retention(keep_days=args.keep_days, batch_size=args.batch_size, max_days=args.max_days))
+
+
 def _cmd_analyze(args) -> None:
     from mda.pipelines import scoring
 
-    print(scoring.run_scoring(min_gap_hours=args.min_gap_hours, cable_km=args.cable_km))
+    print(
+        scoring.run_scoring(
+            min_gap_hours=args.min_gap_hours,
+            cable_km=args.cable_km,
+            explain=args.explain,
+            top=args.top,
+        )
+    )
 
 
 def _cmd_foundry_sync(args) -> None:
@@ -135,6 +159,7 @@ def _cmd_export_dashboard(args) -> None:
 def _cmd_ais_stream(args) -> None:
     from mda.collectors import aisstream_realtime
 
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     regions = [r.strip() for r in args.regions.split(",") if r.strip()]
     stats = aisstream_realtime.run_sync(regions, duration=args.duration, to_lake=args.to_lake)
     print(f"ais-stream regions={regions} {stats}")
@@ -230,6 +255,19 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--to-lake", action="store_true")
     a.set_defaults(func=_cmd_ais_stream)
 
+    ge = sub.add_parser("collect-gfw-events")
+    ge.add_argument("--start", type=_date, required=True)
+    ge.add_argument("--end", type=_date, required=True)
+    ge.add_argument("--regions", default="west_sea")
+    ge.add_argument("--limit", type=int, default=None, help=argparse.SUPPRESS)
+    ge.set_defaults(func=_cmd_collect_gfw_events)
+
+    rt = sub.add_parser("retention")
+    rt.add_argument("--keep-days", type=int, default=14)
+    rt.add_argument("--batch-size", type=int, default=50_000)
+    rt.add_argument("--max-days", type=int, default=None)
+    rt.set_defaults(func=_cmd_retention)
+
     w = sub.add_parser("collect-weather")
     w.add_argument("--start", type=_date, required=True)
     w.add_argument("--end", type=_date, required=True)
@@ -242,8 +280,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("collect-reference").set_defaults(func=_cmd_collect_reference)
 
     an = sub.add_parser("analyze")
-    an.add_argument("--min-gap-hours", type=float, default=6.0)
-    an.add_argument("--cable-km", type=float, default=3.0)
+    an.add_argument("--min-gap-hours", type=float, default=None)
+    an.add_argument("--cable-km", type=float, default=None)
+    an.add_argument("--explain", action="store_true")
+    an.add_argument("--top", type=int, default=20)
     an.set_defaults(func=_cmd_analyze)
 
     ed = sub.add_parser("export-dashboard")

@@ -57,8 +57,15 @@
 
 .points {
   font-size: var(--fs-xs);
-  color: var(--text-1);
   flex: 0 0 auto;
+}
+
+.pointsPositive {
+  color: var(--crit);
+}
+
+.pointsNegative {
+  color: var(--accent);
 }
 
 .detail {
@@ -75,9 +82,10 @@
 }
 
 .total {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
   font-size: var(--fs-xs);
-  color: var(--text-1);
-  text-align: right;
   padding-top: var(--sp-1);
   border-top: 1px solid var(--line);
 }
