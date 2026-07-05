@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { activeDataset } from '../api/client';
 import { useAppState } from '../state/AppState';
 import styles from './SitrepCard.module.css';
 
@@ -30,7 +31,12 @@ export default function SitrepCard() {
       if (inFlight.current) return;
       inFlight.current = true;
       try {
-        const res = await fetch(`/api/sitrep?region=${encodeURIComponent(regionId)}`);
+        const dataset = activeDataset();
+        const res = await fetch(
+          `/api/sitrep?region=${encodeURIComponent(regionId)}${
+            dataset ? `&dataset=${encodeURIComponent(dataset)}` : ''
+          }`,
+        );
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as Sitrep;
         if (!cancelled) setSitrep(data);
@@ -54,7 +60,7 @@ export default function SitrepCard() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [regionId, settings.autoRefresh]);
+  }, [regionId, settings.autoRefresh, settings.dataset]);
 
   return (
     <div className={styles.card}>

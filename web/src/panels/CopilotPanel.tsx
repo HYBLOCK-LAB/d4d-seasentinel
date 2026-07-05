@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { SendHorizonal } from 'lucide-react';
 import { IconButton } from '../design/components';
 import { useAppDispatch, useAppState } from '../state/AppState';
-import { api } from '../api/client';
+import { activeDataset, api } from '../api/client';
 import styles from './CopilotPanel.module.css';
 
 interface Message {
@@ -185,9 +185,10 @@ export function CopilotPanel() {
   }, [messages]);
 
   function windowQs(): string {
+    const dataset = activeDataset();
     return `region=${encodeURIComponent(state.regionId)}&start=${encodeURIComponent(
       state.window.start,
-    )}&end=${encodeURIComponent(state.window.end)}`;
+    )}&end=${encodeURIComponent(state.window.end)}${dataset ? `&dataset=${encodeURIComponent(dataset)}` : ''}`;
   }
 
   async function fetchJson(path: string): Promise<unknown> {
@@ -236,10 +237,16 @@ export function CopilotPanel() {
           }));
         return JSON.stringify({ total: data.threats.length, top });
       }
-      case 'get_threat_evidence':
+      case 'get_threat_evidence': {
+        const dataset = activeDataset();
         return JSON.stringify(
-          await fetchJson(`/api/threats/${encodeURIComponent(String(args.threat_id))}/evidence`),
+          await fetchJson(
+            `/api/threats/${encodeURIComponent(String(args.threat_id))}/evidence${
+              dataset ? `?dataset=${encodeURIComponent(dataset)}` : ''
+            }`,
+          ),
         );
+      }
       case 'get_osint': {
         const data = (await fetchJson(`/api/osint?${windowQs()}`)) as {
           items: Array<Record<string, unknown>>;
@@ -258,11 +265,17 @@ export function CopilotPanel() {
           await fetchJson(`/api/timeline?${windowQs()}&bucket=${args.bucket === 'day' ? 'day' : 'hour'}`),
         );
       case 'assess_threat': {
-        const res = await fetch(`/api/threats/${encodeURIComponent(String(args.threat_id))}/assess`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: args.action, reason: args.reason }),
-        });
+        const dataset = activeDataset();
+        const res = await fetch(
+          `/api/threats/${encodeURIComponent(String(args.threat_id))}/assess${
+            dataset ? `?dataset=${encodeURIComponent(dataset)}` : ''
+          }`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: args.action, reason: args.reason }),
+          },
+        );
         if (!res.ok) {
           return `조정 실패 (${res.status}): ${await res.text()}`;
         }

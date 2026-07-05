@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from mda.api import datasets
 from mda.config import load_scoring_config
 from mda.store import pg
 
@@ -77,14 +78,15 @@ def apply_assessments(conn) -> int:
 
 
 @router.post("/threats/{threat_id}/assess")
-def assess_threat(threat_id: str, request: AssessRequest) -> dict:
+def assess_threat(threat_id: str, request: AssessRequest, dataset: str | None = None) -> dict:
     points = ACTION_POINTS.get(request.action)
     if points is None:
         raise HTTPException(status_code=422, detail=f"unknown action: {request.action}")
     if not request.reason.strip():
         raise HTTPException(status_code=422, detail="reason required")
     thresholds = load_scoring_config().thresholds
-    with pg.connect() as conn:
+    ds = None if datasets.is_live(dataset) else dataset
+    with pg.connect(dataset=ds) as conn:
         with conn.cursor() as cur:
             cur.execute("select 1 from alert where alert_id = %s", (threat_id,))
             if cur.fetchone() is None:
@@ -111,8 +113,9 @@ def assess_threat(threat_id: str, request: AssessRequest) -> dict:
 
 
 @router.get("/threats/{threat_id}/assessments")
-def list_assessments(threat_id: str) -> dict:
-    with pg.connect(readonly=True) as conn:
+def list_assessments(threat_id: str, dataset: str | None = None) -> dict:
+    ds = None if datasets.is_live(dataset) else dataset
+    with pg.connect(readonly=True, dataset=ds) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "select assessment_id, points, reason, author, created_at "

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Moon, Sun, Cpu, RefreshCw } from 'lucide-react';
+import { Moon, Sun, Cpu, RefreshCw, FlaskConical } from 'lucide-react';
 import { useAppState, useAppDispatch } from '../state/AppState';
 import { api } from '../api/client';
+import type { DatasetInfo } from '../api/types';
 import styles from './SettingsPanel.module.css';
 
 export function SettingsPanel() {
@@ -11,6 +12,7 @@ export function SettingsPanel() {
 
   const [models, setModels] = useState<string[]>([]);
   const [defaultModel, setDefaultModel] = useState('');
+  const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,15 +21,55 @@ export function SettingsPanel() {
       setModels(res.models);
       setDefaultModel(res.default);
     });
+    api.datasets().then((res) => {
+      if (!cancelled) setDatasets(res.datasets);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
   const selectedModel = settings.model || defaultModel;
+  const selectedDataset = settings.dataset || 'live';
+  const datasetInfo = datasets.find((d) => d.id === selectedDataset);
+
+  function handleDatasetChange(id: string) {
+    const info = datasets.find((d) => d.id === id);
+    dispatch({
+      type: 'settings',
+      patch: {
+        dataset: id === 'live' ? '' : id,
+        datasetLabel: id === 'live' ? '' : (info?.name_ko ?? id),
+      },
+    });
+  }
 
   return (
     <div className={styles.panel}>
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <span className="micro-label">데이터셋 DATASET</span>
+        </div>
+        <div className={styles.modelRow}>
+          <FlaskConical size={14} className={styles.modelIcon} />
+          <select
+            className={styles.select}
+            value={selectedDataset}
+            onChange={(e) => handleDatasetChange(e.target.value)}
+          >
+            {datasets.length === 0 && <option value="live">실데이터 (LIVE)</option>}
+            {datasets.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name_ko}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className={styles.caption}>
+          {datasetInfo?.description ?? '실데이터가 기본값 — 백테스트용 시나리오 데이터셋을 선택하면 전체 온톨로지가 교체됩니다'}
+        </p>
+      </section>
+
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <span className="micro-label">표시 THEME</span>

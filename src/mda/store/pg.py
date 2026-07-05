@@ -23,9 +23,21 @@ def dsn() -> str:
     return value
 
 
+_SCHEMA_RE = __import__("re").compile(r"^[a-z][a-z0-9_]{0,40}$")
+
+
+def scenario_schema(dataset: str) -> str:
+    if not _SCHEMA_RE.match(dataset):
+        raise ValueError(f"invalid dataset id: {dataset!r}")
+    return f"sim_{dataset}"
+
+
 @contextmanager
-def connect(readonly: bool = False):
-    conn = psycopg.connect(dsn(), autocommit=False)
+def connect(readonly: bool = False, dataset: str | None = None):
+    # search_path is set as a libpq startup option (not a post-connect SET) so it
+    # survives transaction rollbacks; a plain SET would revert to public on rollback.
+    options = f"-c search_path={scenario_schema(dataset)},public" if dataset else None
+    conn = psycopg.connect(dsn(), autocommit=False, options=options)
     try:
         if readonly:
             conn.read_only = True

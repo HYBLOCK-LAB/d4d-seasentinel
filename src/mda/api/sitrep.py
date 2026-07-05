@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from fastapi import APIRouter
 
-from mda.api import queries
+from mda.api import datasets, queries
 from mda.api.assess import apply_assessments
 from mda.api.llm import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 from mda.store import pg
@@ -112,13 +112,14 @@ async def _generate(region_id: str, start: datetime, end: datetime, threats: lis
 
 
 @router.get("/sitrep")
-async def get_sitrep(region: str | None = None) -> dict:
+async def get_sitrep(region: str | None = None, dataset: str | None = None) -> dict:
+    ds = None if datasets.is_live(dataset) else dataset
     region_obj = queries.resolve_region(region)
-    lock = _locks.setdefault(region_obj.region_id, asyncio.Lock())
+    lock = _locks.setdefault(f"{ds or 'live'}:{region_obj.region_id}", asyncio.Lock())
     async with lock:
-        with pg.connect() as conn:
+        with pg.connect(dataset=ds) as conn:
             apply_assessments(conn)
-            start, end = queries.compute_window(conn)
+            start, end = queries.compute_window(conn, extend_to_now=ds is None)
             threats = queries.get_threats(conn, region_obj, start, end)
             cur_sig = threat_signature(threats)
             prev = _latest(conn, region_obj.region_id)
@@ -140,7 +141,7 @@ async def get_sitrep(region: str | None = None) -> dict:
                 "stale": True,
             }
 
-        with pg.connect() as conn:
+        with pg.connect(dataset=ds) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "insert into sitrep (region_id, model, threat_sig, body_ko) "

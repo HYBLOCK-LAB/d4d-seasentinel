@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react'
 import type * as GeoJSON from 'geojson'
-import { api } from '../api/client'
+import { api, setDataset } from '../api/client'
 import type { Meta, Region, Threat, TimeWindow } from '../api/types'
 import { DEFAULT_REGION_ID, FALLBACK_REGIONS } from '../constants/regions'
 
@@ -17,6 +17,8 @@ export interface Settings {
   theme: 'dark' | 'light'
   model: string
   autoRefresh: boolean
+  dataset: string
+  datasetLabel: string
 }
 
 export interface AppState {
@@ -70,6 +72,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   model: '',
   autoRefresh: true,
+  dataset: '',
+  datasetLabel: '',
 }
 
 const SETTINGS_STORAGE_KEY = 'seasentinel.settings'
@@ -111,6 +115,8 @@ export const initialState: AppState = {
   windowRefreshScope: 'all',
 }
 
+setDataset(initialState.settings.dataset)
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'meta': {
@@ -119,6 +125,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         meta: action.meta,
         regions: action.meta.regions.length ? action.meta.regions : state.regions,
+        regionId: action.meta.default_region || state.regionId,
         window: w,
         fullRange: w,
         windowRefreshScope: 'all',
@@ -168,12 +175,13 @@ const DispatchCtx = createContext<Dispatch<Action>>(() => {})
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  setDataset(state.settings.dataset)
   useEffect(() => {
     api.meta().then(
       (meta) => dispatch({ type: 'meta', meta }),
       () => {},
     )
-  }, [])
+  }, [state.settings.dataset])
   useEffect(() => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(state.settings))
     document.documentElement.dataset.theme = state.settings.theme
